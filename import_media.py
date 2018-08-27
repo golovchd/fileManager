@@ -1,12 +1,12 @@
 #!/usr/bin/python2.7
-# Import photos from media to storage
+"""Import photos from media to storage."""
 
 
 import argparse
 from datetime import datetime, timedelta
-import exifread
 import os
-import string
+
+import exifread
 
 
 _COMPARE_TIME_DIFF = timedelta(2)
@@ -94,10 +94,11 @@ def compare_files(file_name_1, dir_path_1, dir_path_2, file_name_2=None):
   return exif_time_1 == read_file_time(file_path_2)
 
 
-class MediaFilesIterator:
+class MediaFilesIterator(object):
+  """Iterator class for MediaFiles."""
   def __init__(self, media):
     self.media = media
-    self.dir_names = self.media.AllDirs()
+    self.dir_names = self.media.get_all_dir_names()
     self.dir_idx = 0
     self.dir_count = len(self.dir_names)
     self.file_idx = 0
@@ -108,7 +109,7 @@ class MediaFilesIterator:
 
   def init_dir(self, stop_iteration=False):
     if self.dir_idx < self.dir_count:
-      self.cur_dir = self.media.DirFiles(self.dir_names[self.dir_idx])
+      self.cur_dir = self.media.get_dir_files(self.dir_names[self.dir_idx])
       self.cur_dir_count = len(self.cur_dir)
       self.file_idx = 0
     else:
@@ -135,7 +136,8 @@ class MediaFilesIterator:
       self.init_dir(True)
       return self.next_file()
 
-class MediaFiles:
+class MediaFiles(object):
+  """Iterable representation of dir tree and files located in that tree."""
   default_types = {'photo':['jpg', 'arw'],
                    'video':['mts', 'mp4', 'mov']
                   }
@@ -148,32 +150,40 @@ class MediaFiles:
       self.types = types
     else:
       self.types = MediaFiles.default_types
-    self.SetAllTypes()
+    self.set_all_types()
     self.import_list = {}
 
   def __iter__(self):
+    """Returns iterator."""
     return MediaFilesIterator(self)
 
-  def SetAllTypes(self):
+  def set_all_types(self):
+    """Flattaning self.types dictionary to list self.all_types."""
     self.all_types = []
     for _, types in self.types.iteritems():
       self.all_types.extend(types)
 
-  def FileToImport(self, filename):
+  def is_importable(self, filename):
+    """Checking if type of given filename is in self.all_types."""
     file_type = file_type_from_name(filename)
     return file_type in self.all_types
 
-  def AllDirs(self):
+  def get_all_dir_names(self):
+    """Returns full names of all dirs present under self.root."""
     return self.import_list.keys()
 
-  def DirFiles(self, dir_name):
+  def get_dir_files(self, dir_name):
+    """Returns list of files of dir_name if it present under self.root."""
     if dir_name in self.import_list:
       return self.import_list[dir_name]
+    else:
+      return []
 
-  def ReadDir(self, dir_path, files):
+  def import_dir_files(self, dir_path, files_list):
+    """Filter importable files from files_list and save to self.import_list."""
     dir_list = []
-    for file_name in files:
-      if self.FileToImport(file_name):
+    for file_name in files_list:
+      if self.is_importable(file_name):
         dir_list.append(file_name)
     dir_count = len(dir_list)
     if dir_count:
@@ -181,17 +191,26 @@ class MediaFiles:
       self.import_list[dir_path] = dir_list
       self.count += dir_count
 
-  def ReadMedia(self, filter_storage=False):
+  def import_media(self, filter_storage=False):
+    """Read dirs under self.root and import files from each dir."""
     if filter_storage:
       dir_list = MediaFiles.storage_dirs
     else:
       dir_list = ['']
     for dir_name in dir_list:
-      for root, dirs, files in os.walk(os.path.join(self.root, dir_name)):
-        self.ReadDir(root, files)
+      for root, _, files in os.walk(os.path.join(self.root, dir_name)):
+        self.import_dir_files(root, files)
     return self.count
 
-  def FindFile(self, file_name, file_path=None):
+  def find_file_on_media(self, file_name, file_path):
+    """Looks for file_name on current media.
+
+    Args:
+      file_name: name of tested file.
+      file_path: full path to testd file.
+
+    Returns:
+      Path to file on media identical to given or None if not found."""
     for dir_path, files in self.import_list.iteritems():
       # Skip Matching dirs to themselfs, will allow import from subdirs
       if dir_path == file_path:
@@ -202,37 +221,63 @@ class MediaFiles:
     return None
 
 
-def ImportMedia(media_root, storage_root):
+def get_import_list(media_root, storage_root, verbose=True):
+  """Generating list of files to import.
+
+    Collecting list of files with supported types from media_root and looking
+    for not yet present in storage_root
+
+    Args:
+      media_root: string, path to dir to import from
+      storage_root: string, path to destination dir
+      verbose: boolean, if True fould files and analysis results will be printed
+    Returns:
+      Tuple, list of files from media_root tree not found in storage_root and
+      dictionary with files from media_root as keys and their matches in
+      storage_root tree
+  """
   media = MediaFiles(media_root)
-  media.ReadMedia()
-  print '{} contain {} files'.format(media_root, media.count)
+  media.import_media()
+  already_imported_files = {}
+  not_imported_files = []
+  if verbose:
+    print '{} contain {} files'.format(media_root, media.count)
   if not media.count:
-    return 0
+    return (not_imported_files, already_imported_files)
   storage = MediaFiles(storage_root)
-  storage.ReadMedia(True)
-  print '{} contain {} files'.format(storage_root, storage.count)
+  storage.import_media(True)
+  if verbose:
+    print '{} contain {} files'.format(storage_root, storage.count)
   count = 0
   present_count = 0
   for file_path, file_name in media:
     count += 1
-    print 'Processing {} {}/{}'.format(file_name, count, media.count),
-    storage_dir = storage.FindFile(file_name, file_path)
+    if verbose:
+      print 'Processing {} {}/{}'.format(file_name, count, media.count),
+    storage_dir = storage.find_file_on_media(file_name, file_path)
     if storage_dir:
       present_count += 1
-      print 'present in {}'.format(storage_dir)
+      already_imported_files[file_name] = storage_dir
+      if verbose:
+        print 'present in {}'.format(storage_dir)
     else:
-      print 'NOT present in storage'
-  print '{} contain {} files, {} not present in {}'.format(
-      media_root, media.count, count - present_count, storage_root)
+      not_imported_files.append(file_name)
+      if verbose:
+        print 'NOT present in storage'
+  if verbose:
+    print '{} contain {} files, {} not present in {}'.format(
+        media_root, media.count, count - present_count, storage_root)
+  return (not_imported_files, already_imported_files)
 
 
 def main():
+  """Module as util use wrapper."""
   args = argparse.ArgumentParser(
       description='Import photos from media to storage')
   args.add_argument('--media', help='Media to import files from')
   args.add_argument('--storage', help='Storage to save imported media files')
   args.parse_args(namespace=args)
-  ImportMedia(args.media, args.storage)
+  get_import_list(args.media, args.storage)
 
 if __name__ == '__main__':
   main()
