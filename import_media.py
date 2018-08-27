@@ -18,13 +18,12 @@ class ExifTimeError(Exception):
 class IterateDir(Exception):
   pass
 
-def FileType(file_name):
-  try:
-    return os.path.splitext(file_name)[1][1:].lower()
-  except Exception:
-    return None
 
-def ExifTimeToUnix(exif_time):
+def file_type_from_name(file_name):
+  return os.path.splitext(file_name)[1][1:].lower()
+
+
+def exif_time2unix(exif_time):
   exif_time_str = str(exif_time)
   if len(exif_time_str) != 19:
     raise ExifTimeError('unexpectef ExifTime {}'.format(exif_time_str))
@@ -40,36 +39,36 @@ def ExifTimeToUnix(exif_time):
                   int(exif_time_parts[5]))
 
 
-def Float2Timestamp(float_timestamp):
+def float2timestamp(float_timestamp):
   return datetime.fromtimestamp(float_timestamp)
 
 
-def Timestamp2ExifStr(timestamp_obj):
+def timestamp2exif_str(timestamp_obj):
   return timestamp_obj.strftime('%Y:%m:%d %H:%M:%S')
-    
 
-def FileTime(file_name, exif_only=False):
+
+def read_file_time(file_name, exif_only=False):
   file_time = None
-  if FileType(file_name) in MediaFiles.default_types['photo']:
-    with open(file_name, 'rb') as f:
-      tags = exifread.process_file(f, details=False)
-      f.close()
+  if file_type_from_name(file_name) in MediaFiles.default_types['photo']:
+    with open(file_name, 'rb') as file_obj:
+      tags = exifread.process_file(file_obj, details=False)
+      file_obj.close()
     file_time = tags.get('Image DateTime', None)
   if not file_time:
     if exif_only:
       raise ExifTimeError('unable to read ExifTime from {}'.format(file_name))
-    file_timestamp = Float2Timestamp(os.stat(file_name).st_mtime)
-    print 'mtime as FileTime {}'.format(Timestamp2ExifStr(file_timestamp)), 
+    file_timestamp = float2timestamp(os.stat(file_name).st_mtime)
+    print 'mtime as file_time {}'.format(timestamp2exif_str(file_timestamp)),
   else:
-    file_timestamp = ExifTimeToUnix(file_time)
-    print 'exif as FileTime {}'.format(file_time), 
+    file_timestamp = exif_time2unix(file_time)
+    print 'exif as file_time {}'.format(file_time),
   return file_timestamp
 
-def CompareFiles(file_name_1, dir_path_1, dir_path_2, file_name_2 = None):
-  file_type = FileType(file_name_1)
+def compare_files(file_name_1, dir_path_1, dir_path_2, file_name_2=None):
+  file_type = file_type_from_name(file_name_1)
   if not file_name_2:
     file_name_2 = file_name_1
-  elif file_type != FileType(file_name_2):
+  elif file_type != file_type_from_name(file_name_2):
     return False
   file_path_1 = os.path.join(dir_path_1, file_name_1)
   file_path_2 = os.path.join(dir_path_2, file_name_2)
@@ -86,13 +85,13 @@ def CompareFiles(file_name_1, dir_path_1, dir_path_2, file_name_2 = None):
   if stat_1.st_mtime == stat_2.st_mtime:
     print 'mtime match in locations',
     return True
-  
-  exif_time_1 = FileTime(file_path_1, True)
-  mtime_2 = Float2Timestamp(stat_2.st_mtime)
+
+  exif_time_1 = read_file_time(file_path_1, True)
+  mtime_2 = float2timestamp(stat_2.st_mtime)
   if exif_time_1 - mtime_2 > _COMPARE_TIME_DIFF:
-    print 'second file too old {}'.format(Timestamp2ExifStr(mtime_2)),
+    print 'second file too old {}'.format(timestamp2exif_str(mtime_2)),
     return False
-  return exif_time_1 == FileTime(file_path_2)
+  return exif_time_1 == read_file_time(file_path_2)
 
 
 class MediaFilesIterator:
@@ -127,7 +126,7 @@ class MediaFilesIterator:
       raise StopIteration()
     else:
       raise IterateDir()
-  
+
   def next(self):
     try:
       return self.next_file()
@@ -151,7 +150,7 @@ class MediaFiles:
       self.types = MediaFiles.default_types
     self.SetAllTypes()
     self.import_list = {}
- 
+
   def __iter__(self):
     return MediaFilesIterator(self)
 
@@ -161,7 +160,7 @@ class MediaFiles:
       self.all_types.extend(types)
 
   def FileToImport(self, filename):
-    file_type = FileType(filename)
+    file_type = file_type_from_name(filename)
     return file_type in self.all_types
 
   def AllDirs(self):
@@ -193,16 +192,15 @@ class MediaFiles:
     return self.count
 
   def FindFile(self, file_name, file_path=None):
-#    file_path = os.path.dirname(file_name)
     for dir_path, files in self.import_list.iteritems():
       # Skip Matching dirs to themselfs, will allow import from subdirs
       if dir_path == file_path:
         continue
       if file_name in files:
-        if file_path and CompareFiles(file_name, file_path, dir_path):
+        if file_path and compare_files(file_name, file_path, dir_path):
           return dir_path
     return None
-    
+
 
 def ImportMedia(media_root, storage_root):
   media = MediaFiles(media_root)
@@ -225,12 +223,12 @@ def ImportMedia(media_root, storage_root):
     else:
       print 'NOT present in storage'
   print '{} contain {} files, {} not present in {}'.format(
-    media_root, media.count, count - present_count, storage_root)
+      media_root, media.count, count - present_count, storage_root)
 
- 
-def main ():
+
+def main():
   args = argparse.ArgumentParser(
-    description='Import photos from media to storage')
+      description='Import photos from media to storage')
   args.add_argument('--media', help='Media to import files from')
   args.add_argument('--storage', help='Storage to save imported media files')
   args.parse_args(namespace=args)
