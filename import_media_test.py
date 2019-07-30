@@ -40,6 +40,30 @@ class ImportMediaTestCase(unittest.TestCase):
         os.path.join(self._test_data, 'media/DSC06979.JPG'), True)
     self.assertEqual(test_file_date, datetime(2018, 2, 19, 11, 05, 43))
 
+  def test_import(self):
+    missing_list = [
+        '6TB-2 benchmark 2018-08-25 20-58-29.png',
+        'IMG_0013.JPG',
+    ]
+    present_dict = {
+        'DSC06979.JPG': 'test_data/storage/DSC06979.JPG',
+        'IMG_0004.JPG': 'test_data/storage/tagged/IMG_0004.JPG',
+    }
+    present_tagged_dict = {
+        'DSC06979.JPG': 'test_data/storage/tagged/DSC06979.JPG',
+        'IMG_0004.JPG': 'test_data/storage/tagged/IMG_0004.JPG',
+    }
+    not_imported, already_imported = import_media.get_import_list(
+        'test_data/media', 'test_data/storage',
+        verbose=True, filter_storage=False)
+    self.assertEqual(missing_list, not_imported)
+    self.assertEqual(present_dict, already_imported)
+    not_imported, already_imported = import_media.get_import_list(
+        'test_data/media', 'test_data/storage/tagged',
+        verbose=True, filter_storage=False)
+    self.assertEqual(missing_list, not_imported)
+    self.assertEqual(present_tagged_dict, already_imported)
+
 
 if __name__ == '__main__':
   unittest.main()
