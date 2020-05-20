@@ -335,6 +335,27 @@ def print_time(path):
     print 'file_time({})={}'.format(file_path, read_file_time(file_path))
 
 
+def import_action(args):
+  """Implementation of import action."""
+  if args.media is None or args.storage is None:
+    print 'Import require both --media and --storage agruments.'
+    exit(1)
+  files_to_import = get_import_list(
+      args.media, args.storage, verbose=args.verbose,
+      filter_storage=args.import_all)
+
+
+def print_time_action(args):
+  """Implementation of print_time_action action."""
+  if args.media is None and args.storage is None:
+    print 'Print_time require at least one --media or --storage agrument.'
+    exit(1)
+  if args.media:
+    print_time(args.media)
+  if args.storage:
+    print_time(args.storage)
+
+
 def main():
   """Module as util use wrapper."""
   actions = [
@@ -355,23 +376,15 @@ def main():
   args.add_argument('--verbose',
                     help='Print verbose output',
                     action="store_true", default=False)
+  args.add_argument('--dry_run',
+                    help='Print action instead of executing it',
+                    action="store_true", default=False)
   args.parse_args(namespace=args)
   # pylint: disable=no-member
   if args.action == 'import':
-    if args.media is None or args.storage is None:
-      print 'Import require both --media and --storage agruments.'
-      exit(1)
-    get_import_list(args.media, args.storage, verbose=args.verbose,
-                    filter_storage=args.import_all)
+    import_action(args)
   elif args.action == 'print_time':
-    if args.media is None and args.storage is None:
-      print 'Print_time require at least one --media or --storage agrument.'
-      exit(1)
-    if args.media:
-      print_time(args.media)
-    if args.storage:
-      print_time(args.storage)
-
+    print_time_action(args)
 
 if __name__ == '__main__':
   main()
