@@ -3,6 +3,7 @@
 
 
 import argparse
+import logging
 import os
 from datetime import datetime, timedelta
 
@@ -57,8 +58,7 @@ def read_file_time(file_name, exif_only=False):
     if file_type_from_name(file_name) in MediaFiles.default_types['photo']:
         with open(file_name, 'rb') as file_obj:
             tags = exifread.process_file(file_obj, details=False)
-            # print(tags)
-            file_obj.close()
+            logging.debug(f"{file_name} tags {tags}")
 
         file_time = tags.get('EXIF DateTimeOriginal',
                              tags.get('Image DateTime', None))
@@ -66,11 +66,12 @@ def read_file_time(file_name, exif_only=False):
         if exif_only:
             raise ExifTimeError(f"unable to read ExifTime from {file_name}")
         file_timestamp = float2timestamp(os.stat(file_name).st_mtime)
-        print(f"mtime as file_time {timestamp2exif_str(file_timestamp)}",
-              end=" ")
+        logging.debug(
+            f"{file_name} mtime as file_time "
+            f"{timestamp2exif_str(file_timestamp)}")
     else:
         file_timestamp = exif_time2unix(file_time)
-        print(f"exif as file_time {file_time}", end=" ")
+        logging.debug(f"{file_name} exif as file_time {file_time}")
     return file_timestamp
 
 
@@ -101,21 +102,23 @@ def compare_files(file_name_1, dir_path_1, dir_path_2, file_name_2=None):
     stat_1 = os.stat(file_path_1)
     stat_2 = os.stat(file_path_2)
     if file_type not in MediaFiles.default_types['photo']:
-        print("not a photo, match by size", end=" ")
+        logging.debug(f"{file_name_1} not a photo, match by size")
         return stat_1.st_size == stat_2.st_size
 
     if stat_1.st_size != stat_2.st_size:
-        print("Size diff,", end=" ")
+        message = "Size diff,"
     else:
-        print("Size match,", end=" ")
+        message = "Size match,"
     if stat_1.st_mtime == stat_2.st_mtime:
-        print("mtime match in locations", end=" ")
+        logging.debug(
+            f"{file_path_1},{file_path_2} {message}, mtime match in locations")
         return True
 
     exif_time_1 = read_file_time(file_path_1, True)
     mtime_2 = float2timestamp(stat_2.st_mtime)
     if exif_time_1 - mtime_2 > _COMPARE_TIME_DIFF:
-        print(f"second file too old {timestamp2exif_str(mtime_2)}")
+        logging.debug(
+            f"second file {file_path_2} too old {timestamp2exif_str(mtime_2)}")
         return False
     return exif_time_1 == read_file_time(file_path_2)
 
@@ -220,7 +223,7 @@ class MediaFiles:
                 dir_list.append(file_name)
         dir_count = len(dir_list)
         if dir_count:
-            # print("loading {dir_count} files from {dir_path}")
+            logging.debug(f"loading {dir_count} files from {dir_path}")
             self.import_list[dir_path] = dir_list
             self.count += dir_count
 
@@ -276,8 +279,7 @@ class MediaFiles:
         return copies_list if find_all else None
 
 
-def get_import_list(media_root, storage_root,
-                    verbose=True, filter_storage=True):
+def get_import_list(media_root, storage_root, filter_storage=True):
     """Generating list of files to import.
 
       Collecting list of files with supported types from media_root and looking
@@ -286,7 +288,6 @@ def get_import_list(media_root, storage_root,
       Args:
         media_root: string, path to dir to import from
         storage_root: string, path to destination dir
-        verbose: boolean,if True prints fould files and analysis results
         filter_storage: boolean,if True processing only MediaFiles.storage_dirs
       Returns:
         Tuple, list of files from media_root tree not found in storage_root and
@@ -297,33 +298,27 @@ def get_import_list(media_root, storage_root,
     media.import_media()
     already_imported_files = {}
     not_imported_files = []
-    if verbose:
-        print(f"{media_root} contain {media.count} files")
+    logging.info(f"{media_root} contain {media.count} files")
     if not media.count:
         return (not_imported_files, already_imported_files)
     storage = MediaFiles(storage_root)
     storage.import_media(filter_storage)
-    if verbose:
-        print(f"{storage_root} contain {storage.count} files")
+    logging.info(f"{storage_root} contain {storage.count} files")
     count = 0
     present_count = 0
     for file_path, file_name in media:
         count += 1
-        if verbose:
-            print(f"Processing {file_name} {count}/{media.count}", end=" ")
+        logging.info(f"Processing {file_name} {count}/{media.count}")
         storage_dir = storage.find_file_on_media(file_name, file_path)
         if storage_dir:
             present_count += 1
             already_imported_files[file_name] = storage_dir
-            if verbose:
-                print(f"present in {storage_dir}")
+            logging.info(f"{file_name} present in {storage_dir}")
         else:
             not_imported_files.append(file_name)
-            if verbose:
-                print("NOT present in storage")
-    if verbose:
-        print(f"{media_root} contain {media.count} files, "
-              f"{(count - present_count)} not present in {storage_root}")
+            logging.info(f"{file_name} NOT present in storage")
+    logging.info(f"{media_root} contain {media.count} files, "
+                 f"{(count - present_count)} not present in {storage_root}")
     return (not_imported_files, already_imported_files)
 
 
@@ -334,27 +329,28 @@ def print_time(path):
         media.import_media()
     else:
         media = [(os.path.split(path))]
-    print(media)
+    logging.debug(media)
     for media_file in media:
         file_path = os.path.join(media_file[0], media_file[1])
-        print(f"file_time({file_path})={read_file_time(file_path)}")
+        logging.info(f"file_time({file_path})={read_file_time(file_path)}")
 
 
 def import_action(args):
     """Implementation of import action."""
     if args.media is None or args.storage is None:
-        print("Import require both --media and --storage arguments.")
+        logging.critical(
+            "Import require both --media and --storage arguments.")
         exit(1)
     files_to_import = get_import_list(
-        args.media, args.storage, verbose=args.verbose,
-        filter_storage=args.import_all)
-    print(files_to_import)
+        args.media, args.storage, filter_storage=args.import_all)
+    logging.info(files_to_import)
 
 
 def print_time_action(args):
     """Implementation of print_time_action action."""
     if args.media is None and args.storage is None:
-        print("Print_time require at least one --media or --storage argument.")
+        logging.critical(
+            "Print_time require at least one --media or --storage argument.")
         exit(1)
     if args.media:
         print_time(args.media)
@@ -368,26 +364,29 @@ def main():
         'import',
         'print_time',
     ]
-    args = argparse.ArgumentParser(
+    arg_parser = argparse.ArgumentParser(
         description='Import photos from media to storage')
-    args.add_argument('--media', help='Media to import files from',
-                      default=None)
-    args.add_argument('--storage', help='Storage to save imported media files',
-                      default=None)
-    args.add_argument('--action', help='Action to perform',
-                      choices=actions, default='import')
-    args.add_argument(
+    arg_parser.add_argument('--media', help='Media to import files from',
+                            default=None)
+    arg_parser.add_argument(
+        '--storage', help='Storage to save imported media files',
+        default=None)
+    arg_parser.add_argument('--action', help='Action to perform',
+                            choices=actions, default='import')
+    arg_parser.add_argument(
         '--import_all',
         help='Import all files regardless of presence in storage',
         action="store_true", default=False)
-    args.add_argument('--verbose',
-                      help='Print verbose output',
-                      action="store_true", default=False)
-    args.add_argument('--dry_run',
-                      help='Print action instead of executing it',
-                      action="store_true", default=False)
-    args.parse_args(namespace=args)
-    # pylint: disable=no-member
+    arg_parser.add_argument('-v', '--verbose',
+                            help='Print verbose output',
+                            action='count', default=0)
+    arg_parser.add_argument('--dry_run',
+                            help='Print action instead of executing it',
+                            action="store_true", default=False)
+    args = arg_parser.parse_args()
+    logging.basicConfig(
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        level=logging.WARNING - 10 * (args.verbose if args.verbose < 3 else 2))
     if args.action == 'import':
         import_action(args)
     elif args.action == 'print_time':

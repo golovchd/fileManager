@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 """Import Media module unittests."""
 
-
+import argparse
 import os
 import unittest
 from datetime import datetime
@@ -59,15 +59,24 @@ class ImportMediaTestCase(unittest.TestCase):
         }
         not_imported, already_imported = import_media.get_import_list(
             'test_data/media', 'test_data/storage',
-            verbose=True, filter_storage=False)
+            filter_storage=False)
         self.assertEqual(sorted(missing_list), sorted(not_imported))
         self.assertEqual(present_dict, already_imported)
         not_imported, already_imported = import_media.get_import_list(
             'test_data/media', 'test_data/storage/tagged',
-            verbose=True, filter_storage=False)
+            filter_storage=False)
         self.assertEqual(sorted(missing_list), sorted(not_imported))
         self.assertEqual(present_tagged_dict, already_imported)
 
 
 if __name__ == '__main__':
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument('-v', '--verbose',
+                            help='Print verbose output',
+                            action='count', default=0)
+    args = arg_parser.parse_args()
+    import_media.logging.basicConfig(
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        level=import_media.logging.WARNING - 10 * (
+            args.verbose if args.verbose < 3 else 2))
     unittest.main()
