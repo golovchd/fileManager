@@ -3,6 +3,7 @@
 import logging
 import os
 import sqlite3
+from pathlib import Path
 
 import file_utils
 
@@ -112,7 +113,7 @@ class FileManagerDatabase:
             (file_name, file_type, size, mtime, sha1) = file_details
         else:
             (file_name, file_type, size, mtime, sha1) = file_utils.read_file(
-                os.path.join(self._cur_dir_path, fsrecord_name))
+                Path(self._cur_dir_path) / fsrecord_name)
         logging.debug('get_file_id: name=%s, type=%s, %d, %d, %r',
                       file_name, file_type, size, mtime, sha1)
         for row in self._exec_query(_FILE_SELECT, (sha1,), commit=False):
