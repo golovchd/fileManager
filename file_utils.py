@@ -72,9 +72,9 @@ def generate_file_sha1(file_path: Path, blocksize: int = 2**20) -> str:
     file_size = file_path.stat().st_size
     duration = clock_gettime_ns(CLOCK_MONOTONIC) - start_time
     mb_per_second = (file_size * 1000) / duration
-    logging.debug(f"{file_path} size {(file_size / 1000000):.1} MB "
-                  f"process time {(duration / 1000000000):.1} sec. "
-                  f"SHA1 hashing speed {mb_per_second:.2} MB/sec.")
+    logging.debug(f"{file_path} size {(file_size / 1000000):.2f} MB "
+                  f"process time {(duration / 1000000000):.2f} sec. "
+                  f"SHA1 hashing speed {mb_per_second:.2f} MB/sec.")
     return sha1_hash.hexdigest()
 
 
