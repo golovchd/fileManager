@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS "types" (
 );
 CREATE TABLE IF NOT EXISTS "files" (
 	"FileSize"	INTEGER NOT NULL,
-	"MD5"	TEXT NOT NULL,
+	"SHA1"	TEXT NOT NULL,
 	"EarliestDate"	INTEGER,
 	"CanonicalName"	TEXT,
 	"CanonicalType"	TEXT,
@@ -31,8 +31,8 @@ CREATE TABLE IF NOT EXISTS "fsrecords" (
 CREATE INDEX IF NOT EXISTS "file_size" ON "files" (
 	"FileSize"	ASC
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "file_md5" ON "files" (
-	"MD5"	ASC
+CREATE UNIQUE INDEX IF NOT EXISTS "file_sha1" ON "files" (
+	"SHA1"	ASC
 );
 CREATE INDEX IF NOT EXISTS "file_date" ON "files" (
 	"EarliestDate"	ASC

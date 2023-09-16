@@ -28,10 +28,10 @@ _DIR_CLEAN = ('DELETE FROM `fsrecords` WHERE `DiskId` = ? AND'
               ' `ParentId` = ? AND `FileId` IS {} NULL')
 _DIR_CLEAN_NAMES = ' AND `Name` NOT IN (?'
 
-_FILE_SELECT = 'SELECT `ROWID` FROM `files` WHERE `MD5` = ?'
+_FILE_SELECT = 'SELECT `ROWID` FROM `files` WHERE `SHA1` = ?'
 _FILE_TIME_UPDATE = ('UPDATE `files` SET `EarliestDate` = ? WHERE '
                      '`EarliestDate` > ? AND `ROWID` = ? ')
-_FILE_INSERT = ('INSERT INTO `files` (`FileSize`, `MD5`, `EarliestDate`, '
+_FILE_INSERT = ('INSERT INTO `files` (`FileSize`, `SHA1`, `EarliestDate`, '
                 '`CanonicalName`, `CanonicalType`, `MediaType`) '
                 'VALUES (?, ?, ?, ?, ?, ?)')
 
@@ -107,22 +107,23 @@ class FileManagerDatabase:
         return None
 
     def get_file_id(self, fsrecord_name, file_details=None):
-        """Getting file id by file's MD5, inserting if missing."""
+        """Getting file id by file's SHA1, inserting if missing."""
         if file_details:
-            (file_name, file_type, size, mtime, md5) = file_details
+            (file_name, file_type, size, mtime, sha1) = file_details
         else:
-            (file_name, file_type, size, mtime, md5) = file_utils.read_file(
+            (file_name, file_type, size, mtime, sha1) = file_utils.read_file(
                 os.path.join(self._cur_dir_path, fsrecord_name))
         logging.debug('get_file_id: name=%s, type=%s, %d, %d, %r',
-                      file_name, file_type, size, mtime, md5)
-        for row in self._exec_query(_FILE_SELECT, (md5,), commit=False):
+                      file_name, file_type, size, mtime, sha1)
+        for row in self._exec_query(_FILE_SELECT, (sha1,), commit=False):
             self._exec_query(_FILE_TIME_UPDATE, (mtime, mtime, row[0]))
             return row[0], mtime
 
-        self._exec_query(_FILE_INSERT, (size, md5, mtime, file_name, file_type,
-                                        self.get_media_type(file_type)))
+        self._exec_query(_FILE_INSERT, (
+            size, sha1, mtime, file_name, file_type,
+            self.get_media_type(file_type)))
         return self.get_file_id(
-            fsrecord_name, (file_name, file_type, size, mtime, md5))
+            fsrecord_name, (file_name, file_type, size, mtime, sha1))
 
     def get_fsfile_id(self, fsrecord_name):
         """Getting fsrecord id for given file in current did,
