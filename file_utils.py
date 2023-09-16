@@ -3,12 +3,8 @@
 import hashlib
 import logging
 import os
-import re
 import subprocess
-
-_DF_CUT = r'1K-blocks\n(?P<device>[^ ]+) +(?P<size>\d+)'
-_UUID_CUT = r'UUID="(?P<uuid>[^"]+)"'
-_LABEL_CUT = r'LABEL="(?P<label>[^"]+)'
+import sys
 
 
 def get_full_dir_path(path):
@@ -41,17 +37,17 @@ def get_path_from_mount(dir_path):
 def get_path_disk_info(dir_path):
     """Getting disk info for given path."""
     df_device_cmd = ['df', dir_path, '--output=source,size']
-    with subprocess.Popen(df_device_cmd, stdout=subprocess.PIPE) as proc:
-        path_device = proc.stdout.read().decode("utf-8")
-    path_device_match = re.search(_DF_CUT, path_device)
-    blkid_cmd = ['blkid', path_device_match.group('device')]
-    with subprocess.Popen(blkid_cmd, stdout=subprocess.PIPE) as proc:
-        device_info = proc.stdout.read().decode("utf-8")
-    uuid_match = re.search(_UUID_CUT, device_info)
-    label_match = re.search(_LABEL_CUT, device_info)
-    return {'uuid': uuid_match.group('uuid'),
-            'size': int(path_device_match.group('size')),
-            'label': label_match.group('label') if label_match else None}
+    device_path = subprocess.check_output(df_device_cmd).decode(
+        sys.stdin.encoding).split("\n")[-2].split(" ")
+    uuid_cmd = ["lsblk", device_path[0], "--output=UUID,LABEL"]
+    device_info = subprocess.check_output(uuid_cmd).decode(
+        sys.stdin.encoding).split("\n")[-2].split(" ")
+    logging.debug(device_info)
+    return {
+        "uuid": device_info[0],
+        "size": int(device_path[-1]),
+        "label": device_info[-1] if len(device_info) > 1 else "",
+    }
 
 
 def read_dir(dir_path):
