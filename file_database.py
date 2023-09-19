@@ -2,8 +2,9 @@
 
 import logging
 import sqlite3
+import time
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import file_utils
 
@@ -18,24 +19,34 @@ _DISK_INSERT = ("INSERT INTO `disks` (`UUID`, `DiskSize`, `Label`) "
 
 _TOP_DIR_SELECT = ("SELECT `ROWID` FROM `fsrecords` WHERE `DiskId` = ? AND"
                    " `ParentId` IS NULL AND `Name` = '' AND `FileId` IS NULL")
-_FSRECORD_SELECT = ("SELECT `ROWID` FROM `fsrecords` WHERE `DiskId` = ? AND"
-                    " `ParentId` = ? AND `Name` = ? AND `FileId` IS {} NULL")
+_FSRECORD_SELECT = ("SELECT `ROWID`, `SHA1ReadDate` FROM `fsrecords` WHERE"
+                    " `DiskId` = ? AND `ParentId` = ? AND `Name` = ? AND"
+                    " `FileId` IS {} NULL")
 _FSDIR_INSERT = ("INSERT INTO `fsrecords` (`Name`, `ParentId`, `DiskId`) "
                  "VALUES (?, ?, ?)")
 _FSFILE_INSERT = ("INSERT INTO `fsrecords` (`Name`, `ParentId`, `DiskId`, "
-                  "`FileDate`, `FileId`) VALUES (?, ?, ?, ?, ?)")
-_FSFILE_UPDATE = ("UPDATE `fsrecords` SET `FileDate` = ?, `FileId` = ? "
-                  "WHERE `ROWID` = ?")
+                  "`FileDate`, `FileId`, `SHA1ReadDate`) "
+                  "VALUES (?, ?, ?, ?, ?, ?)")
+_FSFILE_UPDATE = ("UPDATE `fsrecords` SET `FileDate` = ?, `FileId` = ?, "
+                  "`SHA1ReadDate` = ? WHERE `ROWID` = ?")
 _DIR_CLEAN = ("DELETE FROM `fsrecords` WHERE `DiskId` = ? AND"
               " `ParentId` = ? AND `FileId` IS {} NULL")
 _DIR_CLEAN_NAMES = " AND `Name` NOT IN (?"
 
-_FILE_SELECT = "SELECT `ROWID` FROM `files` WHERE `SHA1` = ?"
+_FILE_SELECT = ("SELECT `ROWID`, `EarliestDate`, `CanonicalName`, "
+                "`CanonicalType`, `MediaType` FROM `files` WHERE `SHA1` = ?")
 _FILE_TIME_UPDATE = ("UPDATE `files` SET `EarliestDate` = ? WHERE "
                      "`EarliestDate` > ? AND `ROWID` = ? ")
 _FILE_INSERT = ("INSERT INTO `files` (`FileSize`, `SHA1`, `EarliestDate`, "
                 "`CanonicalName`, `CanonicalType`, `MediaType`) "
                 "VALUES (?, ?, ?, ?, ?, ?)")
+_FS_FILE_SELECT = ("SELECT `fsrecords`.`ROWID`, `fsrecords`.`SHA1ReadDate`, "
+                   "`fsrecords`.`FileDate`, `files`.`ROWID`, "
+                   "`files`.`FileSize`, `SHA1`"
+                   " FROM `fsrecords` INNER JOIN `files`"
+                   " ON `files`.`ROWID` = `fsrecords`.`FileId`"
+                   " WHERE `DiskId` = ? AND `ParentId` = ? AND `Name` = ?"
+                   " AND `FileId` IS NOT NULL")
 
 
 class FileManagerDatabase:
@@ -54,7 +65,7 @@ class FileManagerDatabase:
         self._top_dir_id: int = 0
         self._dir_id_cache: Dict[str, int] = {}
         self._cur_dir_id: int = 0
-        self._cur_dir_path: Optional[Path] = None
+        self._cur_dir_path: Path = Path(".")
         logging.info("Using DB {db_name}", )
 
     def __enter__(self):
@@ -123,7 +134,7 @@ class FileManagerDatabase:
             (file_name, file_type, size, mtime, sha1) = file_details
         else:
             (file_name, file_type, size, mtime, sha1) = file_utils.read_file(
-                Path(self._cur_dir_path) / fsrecord_name, True)
+                self._cur_dir_path / fsrecord_name, True)
         logging.debug("get_file_id: name=%s, type=%s, %d, %d, %r",
                       file_name, file_type, size, mtime, sha1)
         for row in self._exec_query(_FILE_SELECT, (sha1,), commit=False):
@@ -146,15 +157,18 @@ class FileManagerDatabase:
                 _FSRECORD_SELECT.format("NOT"),
                 (self._disk_id, self._cur_dir_id, fsrecord_name),
                 commit=False):
-            logging.debug("get_fsfile_id: %s, parent %r = %r",
-                          fsrecord_name, self._cur_dir_id, row[0])
-            self._exec_query(_FSFILE_UPDATE, (file_mtime, file_id, row[0]))
+            logging.debug(
+                f"get_fsfile_id: {fsrecord_name}, parent {self._cur_dir_id} = "
+                f"{row[0]}, SHA1 hash updated on %s",
+                time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(row[1])))
+            self._exec_query(_FSFILE_UPDATE,
+                             (file_mtime, file_id, time.time(), row[0]))
             return row[0]
 
         self._exec_query(
             _FSFILE_INSERT,
             (fsrecord_name, self._cur_dir_id,
-             self._disk_id, file_mtime, file_id))
+             self._disk_id, file_mtime, file_id, time.time()))
         return self.get_fsrecord_id(fsrecord_name, self._cur_dir_id, True)
 
     def get_fsrecord_id(self, fsrecord_name, parent_id, is_file=False):
@@ -213,6 +227,82 @@ class FileManagerDatabase:
             clean_sql += _DIR_CLEAN_NAMES + ", ?" * (len(names) - 1) + ")"
         self._exec_query(
             clean_sql, tuple([self._disk_id, self._cur_dir_id] + names))
+
+    def get_db_file_info(self, file_name: str) -> Tuple[
+            int, float, float, int, int, str]:
+        """Query if exists fsrecords/files details on file.
+            Returned fields:
+                `fsrecords`.`ROWID`
+                `fsrecords`.`SHA1ReadDate`
+                `fsrecords`.`FileDate`
+                `files`.`ROWID`
+                `files`.`FileSize`
+                `files`.`SHA1`
+        """
+        for row in self._exec_query(
+                _FS_FILE_SELECT, (self._disk_id, self._cur_dir_id, file_name),
+                commit=False):
+            return row[0], row[1], row[2], row[3], row[4], row[5]
+        else:
+            return 0, 0, 0, 0, 0, ""
+
+    def select_file_id(self, sha1: str, mtime: float) -> int:
+        """Selects file_id (files.ROWID) by SHA, updates mtime if needed."""
+        for row in self._exec_query(_FILE_SELECT, (sha1,), commit=False):
+            if row[1] > mtime:
+                self._exec_query(_FILE_TIME_UPDATE, (mtime, mtime, row[0]))
+            return row[0]
+        return 0
+
+    def select_update_file_record(
+            self, sha1: str, mtime: float, size: int,
+            file_name: str, file_type: str) -> int:
+        """Select and update or insert file record."""
+        file_id = self.select_file_id(sha1, mtime)
+        if file_id:
+            return file_id
+
+        self._exec_query(_FILE_INSERT, (
+            size, sha1, mtime, file_name, file_type,
+            self.get_media_type(file_type)))
+        return self.select_file_id(sha1, mtime)
+
+    def update_fsrecord(
+            self, fsrecord_id: int, file_name: str,
+            mtime: float, file_id: int) -> None:
+        """Update or insert fsrecords."""
+        if fsrecord_id:
+            self._exec_query(_FSFILE_UPDATE, (
+                mtime, file_id, time.time(), fsrecord_id))
+        else:
+            self._exec_query(
+                _FSFILE_INSERT,
+                (file_name, self._cur_dir_id, self._disk_id, mtime, file_id,
+                 time.time()))
+
+    def update_file(self, file_full_name: str) -> None:
+        """Updates or inserts in DB details on file."""
+        if not self._cur_dir_id:
+            raise ValueError("Missing _cur_dir_id")
+        (
+            fsrecord_id, sha1_read_date, db_file_mtime, file_id, db_file_size,
+            db_file_sha1
+        ) = self.get_db_file_info(file_full_name)
+        file_path = self._cur_dir_path / file_full_name
+        (file_name, file_type, size, mtime, _) = file_utils.read_file(
+                file_path, False)
+        if (self._rehash_time < sha1_read_date and
+                db_file_size == size and db_file_mtime == mtime):
+            return  # Current file details matching DB, no need to re-hash
+
+        (file_name, file_type, size, mtime, sha1) = file_utils.read_file(
+                file_path / file_full_name, True)
+        new_file_id = self.select_update_file_record(
+            sha1, mtime, size, file_name, file_type
+        )
+        self.update_fsrecord(fsrecord_id, file_full_name, mtime, new_file_id)
+        # TODO: Handle deletion of old `files` record file_id
+        del file_id
 
     def update_files(self, files: List[str]) -> None:
         """Updating files in current dir."""
