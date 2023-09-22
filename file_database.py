@@ -52,9 +52,11 @@ _FS_FILE_SELECT = ("SELECT `fsrecords`.`ROWID`, `fsrecords`.`SHA1ReadDate`, "
 class FileManagerDatabase:
     """Representation of fileManager database."""
 
-    def __init__(self, db_name: str, rehash_time: int):
+    def __init__(
+            self, db_name: str, rehash_time: int, new_update: bool = False):
         self._db_name = db_name
         self._rehash_time = rehash_time
+        self._new_update = new_update
         self._con = None
         # Details on current disk
         self._disk_id = None
@@ -314,7 +316,10 @@ class FileManagerDatabase:
     def update_files(self, files: List[str]) -> None:
         """Updating files in current dir."""
         for file_name in files:
-            self.get_fsfile_id(file_name)
+            if self._new_update:
+                self.update_file(file_name)
+            else:
+                self.get_fsfile_id(file_name)
 
     def update_dir(
             self, path: Path,
