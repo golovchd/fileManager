@@ -63,12 +63,16 @@ def generate_file_sha1(file_path: Path, blocksize: int = 2**20) -> str:
     """Safe way to get SHA1 for big files."""
     sha1_hash = hashlib.sha1()
     start_time = clock_gettime_ns(CLOCK_MONOTONIC)
-    with open(file_path, 'rb') as file_handler:
-        while True:
-            buffer = file_handler.read(blocksize)
-            if not buffer:
-                break
-            sha1_hash.update(buffer)
+    try:
+        with open(file_path, 'rb') as file_handler:
+            while True:
+                buffer = file_handler.read(blocksize)
+                if not buffer:
+                    break
+                sha1_hash.update(buffer)
+    except PermissionError:
+        logging.exception(f"generate_file_sha1 failed to read {file_path}")
+        return ""
     file_size = file_path.stat().st_size
     duration = clock_gettime_ns(CLOCK_MONOTONIC) - start_time
     mb_per_second = (file_size * 1000) / duration

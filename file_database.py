@@ -135,6 +135,9 @@ class FileManagerDatabase:
         else:
             (file_name, file_type, size, mtime, sha1) = file_utils.read_file(
                 self._cur_dir_path / fsrecord_name, True)
+        if not sha1:
+            return 0, mtime
+
         logging.debug("get_file_id: name=%s, type=%s, %d, %d, %r",
                       file_name, file_type, size, mtime, sha1)
         for row in self._exec_query(_FILE_SELECT, (sha1,), commit=False):
@@ -153,6 +156,10 @@ class FileManagerDatabase:
         if not self._cur_dir_id:
             raise ValueError("Missing _cur_dir_id")
         file_id, file_mtime = self.get_file_id(fsrecord_name)
+        if not file_id:
+            logging.warning("get_fsfile_id: failed to get SHA1/file_id for {}",
+                            fsrecord_name)
+            return 0
         for row in self._exec_query(
                 _FSRECORD_SELECT.format("NOT"),
                 (self._disk_id, self._cur_dir_id, fsrecord_name),
