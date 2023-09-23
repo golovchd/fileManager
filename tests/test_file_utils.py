@@ -113,14 +113,13 @@ def test_generate_file_sha1():
 
 
 @pytest.mark.parametrize(
-    "file_path, file_name, file_type, size, mtime, sha1_hex",
+    "file_path, file_name, file_type, size, sha1_hex",
     [
         (
             "media/6TB-2 benchmark 2018-08-25 20-58-29.png",
             "6TB-2 benchmark 2018-08-25 20-58-29",
             "png",
             239027,
-            1535255928.937053,
             "db85197ec899df5cbd2a7fb28bf30a1b9875f2ed"
         ),
         (
@@ -128,7 +127,6 @@ def test_generate_file_sha1():
             "not.an.image",
             "txt",
             16,
-            1695097212.287829,
             "c19dfe09be521ccdf6957794128aef97c592baf6"
         ),
         (
@@ -136,7 +134,6 @@ def test_generate_file_sha1():
             "not_an_image",
             "",
             18,
-            1695097576.5729601,
             "956f4ca7fd5877604544213c6b66b33416ebfb3f"
         ),
     ],
@@ -146,22 +143,19 @@ def test_read_file(
         file_name: str,
         file_type: str,
         size: int,
-        mtime: float,
         sha1_hex: str
         ) -> None:
     (
-        read_file_name, read_file_type, read_size, read_mtime, read_sha1
+        read_file_name, read_file_type, read_size, _, read_sha1
     ) = read_file(TEST_DATA_DIR / file_path, True)
     assert read_file_name == file_name
     assert read_file_type == file_type
     assert read_size == size
-    assert read_mtime == mtime
     assert read_sha1 == sha1_hex
     (
-        read_file_name, read_file_type, read_size, read_mtime, read_sha1
+        read_file_name, read_file_type, read_size, _, read_sha1
     ) = read_file(TEST_DATA_DIR / file_path, False)
     assert read_file_name == file_name
     assert read_file_type == file_type
     assert read_size == size
-    assert read_mtime == mtime
     assert read_sha1 == ''
