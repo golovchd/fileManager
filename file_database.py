@@ -322,13 +322,16 @@ class FileManagerDatabase:
 
     def update_dir(
             self, path: Path,
-            max_depth: Optional[int] = 0) -> None:
+            max_depth: Optional[int] = 0, check_disk: bool = True) -> None:
         """Updating DB with dir details, entrypoint for update_database."""
         dir_path = file_utils.get_full_dir_path(path)
         logging.debug(f"update_dir for: {path}, full path: {dir_path}")
-        self.set_disk(**file_utils.get_path_disk_info(dir_path))
+        if check_disk:
+            self.set_disk(**file_utils.get_path_disk_info(dir_path))
         self.set_cur_dir(dir_path)
         files, sub_dirs = file_utils.read_dir(dir_path)
+        logging.info("update_dir: %s, %d files, %d sub dirs",
+                     dir_path, len(files), len(sub_dirs))
         self.clean_cur_dir(files, is_files=True)
         self.clean_cur_dir(sub_dirs, is_files=False)
         self.update_files(files)
@@ -340,4 +343,5 @@ class FileManagerDatabase:
                                     self._cur_dir_path / sub_dir_name)
                     continue
                 self.update_dir(path / sub_dir_name,
-                                max_depth - 1 if max_depth else None)
+                                max_depth=max_depth - 1 if max_depth else None,
+                                check_disk=False)
