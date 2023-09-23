@@ -316,6 +316,8 @@ class FileManagerDatabase:
     def update_files(self, files: List[str]) -> None:
         """Updating files in current dir."""
         for file_name in files:
+            if (self._cur_dir_path / file_name).is_symlink():
+                continue
             if self._new_update:
                 self.update_file(file_name)
             else:
