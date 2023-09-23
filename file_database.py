@@ -53,11 +53,10 @@ class FileManagerDatabase:
     """Representation of fileManager database."""
 
     def __init__(
-            self, db_name: str, rehash_time: int, new_update: bool = False):
-        self._db_name = db_name
+            self, db_path: Path, rehash_time: float, new_update: bool = False):
         self._rehash_time = rehash_time
         self._new_update = new_update
-        self._con = None
+        self._con = sqlite3.connect(db_path)
         # Details on current disk
         self._disk_id = None
         self._disk_uuid = None
@@ -68,11 +67,10 @@ class FileManagerDatabase:
         self._dir_id_cache: Dict[str, int] = {}
         self._cur_dir_id: int = 0
         self._cur_dir_path: Path = Path(".")
-        logging.info(f"Using DB {db_name}")
+        logging.info(f"Using DB {db_path}")
 
     def __enter__(self):
-        """Initiate connect to DB."""
-        self._con = sqlite3.connect(self._db_name)
+        """Allows use with and to ensure connection closure on exit."""
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -81,7 +79,7 @@ class FileManagerDatabase:
         if self._con:
             self._con.close()
 
-    def _exec_query(self, sql, params, commit=True):
+    def _exec_query(self, sql: str, params: Tuple, commit=True):
         """SQL quesy executor with logging."""
         try:
             result = self._con.execute(sql, params)
@@ -95,17 +93,14 @@ class FileManagerDatabase:
 
     def set_disk(self, uuid, size, label):
         """Create/update disk details in DB."""
-        if self._disk_uuid == uuid:
-            # TODO: support free disk space tracking in DB
-            if self._disk_size != size or self._disk_label != label:
-                self._exec_query(
-                    _DISK_UPDATE_SIZE, (size, label, uuid), commit=False)
-            return
         for row in self._exec_query(_DISK_SELECT, (uuid,), commit=False):
             self._disk_id = row[0]
+            # TODO: support free disk space tracking in DB
+            if row[2] != size or row[3] != label:
+                self._exec_query(_DISK_UPDATE_SIZE, (size, label, uuid))
             self._disk_uuid = row[1]
-            self._disk_size = row[2]
-            self._disk_label = row[3]
+            self._disk_size = size
+            self._disk_label = label
             self.set_top_dir()
             break
         else:

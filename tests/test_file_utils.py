@@ -92,8 +92,9 @@ def test_get_path_from_mount_real_path():
              "DSC06979 (copy).JPG",
              "DSC06979.JPG"
          ],
-         ["tagged"]),
+         ["second_dir", "tagged"]),
         ("test_data/storage/tagged", ["DSC06979.JPG", "IMG_0004.JPG"], []),
+        ("test_data/storage/second_dir", ["foo.txt"], []),
     ],
 )
 def test_read_dir(test_path, expected_files, expected_dirs):
