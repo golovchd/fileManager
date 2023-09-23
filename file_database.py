@@ -68,7 +68,7 @@ class FileManagerDatabase:
         self._dir_id_cache: Dict[str, int] = {}
         self._cur_dir_id: int = 0
         self._cur_dir_path: Path = Path(".")
-        logging.info("Using DB {db_name}", )
+        logging.info(f"Using DB {db_name}")
 
     def __enter__(self):
         """Initiate connect to DB."""
@@ -159,7 +159,7 @@ class FileManagerDatabase:
             raise ValueError("Missing _cur_dir_id")
         file_id, file_mtime = self.get_file_id(fsrecord_name)
         if not file_id:
-            logging.warning("get_fsfile_id: failed to get SHA1/file_id for {}",
+            logging.warning("get_fsfile_id: failed to get SHA1/file_id for %s",
                             fsrecord_name)
             return 0
         for row in self._exec_query(
@@ -225,7 +225,7 @@ class FileManagerDatabase:
         self._cur_dir_id = self.get_dir_id(
             file_utils.get_path_from_mount(dir_path))
         self._cur_dir_path = dir_path
-        logging.debug("set_cur_dir: {self._cur_dir_path}={self._cur_dir_id}")
+        logging.debug(f"set_cur_dir: {self._cur_dir_path}={self._cur_dir_id}")
 
     def clean_cur_dir(self, names, is_files):
         """Deleting from DB files/subdirs missing in names list."""
