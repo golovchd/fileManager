@@ -51,8 +51,10 @@ def get_path_disk_info(dir_path):
 def read_dir(dir_path: Path) -> Tuple[List[str], List[str]]:
     """Reading details of files and subdirs."""
     try:
-        files = [file.name for file in dir_path.iterdir() if file.is_file()]
-        dirs = [dir.name for dir in dir_path.iterdir() if dir.is_dir()]
+        files = [file.name for file in dir_path.iterdir()
+                 if file.is_file() and not file.is_symlink()]
+        dirs = [dir.name for dir in dir_path.iterdir()
+                if dir.is_dir() and not dir.is_symlink()]
         return files, dirs
     except PermissionError:
         logging.exception(f"read_dir failed to read {dir_path}")
@@ -73,7 +75,7 @@ def generate_file_sha1(file_path: Path, blocksize: int = 2**20) -> str:
     except PermissionError:
         logging.exception(f"generate_file_sha1 failed to read {file_path}")
         return ""
-    file_size = file_path.stat().st_size
+    file_size = file_path.stat(follow_symlinks=False).st_size
     duration = clock_gettime_ns(CLOCK_MONOTONIC) - start_time
     mb_per_second = (file_size * 1000) / duration
     logging.debug(f"{file_path} size {(file_size / 1000000):.2f} MB "
@@ -85,7 +87,7 @@ def generate_file_sha1(file_path: Path, blocksize: int = 2**20) -> str:
 def read_file(
         file_path: Path, get_sha1: bool) -> Tuple[str, str, int, float, str]:
     """Returns name, type, size, mtime, sha1 of file."""
-    file_stat = file_path.stat()
+    file_stat = file_path.stat(follow_symlinks=False)
     file_name = file_path.name
     file_name_parts = file_name.split('.')
     if len(file_name_parts) > 1:

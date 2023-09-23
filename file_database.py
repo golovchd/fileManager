@@ -317,6 +317,8 @@ class FileManagerDatabase:
         """Updating files in current dir."""
         for file_name in files:
             if (self._cur_dir_path / file_name).is_symlink():
+                logging.warning("update_files called for symlink %s",
+                                self._cur_dir_path / file_name)
                 continue
             if self._new_update:
                 self.update_file(file_name)
@@ -338,5 +340,9 @@ class FileManagerDatabase:
 
         if max_depth != 0:
             for sub_dir_name in sub_dirs:
+                if (path / sub_dir_name).is_symlink():
+                    logging.warning("update_dir called for symlink %s",
+                                    self._cur_dir_path / sub_dir_name)
+                    continue
                 self.update_dir(path / sub_dir_name,
                                 max_depth - 1 if max_depth else None)
