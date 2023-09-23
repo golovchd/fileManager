@@ -305,7 +305,7 @@ class FileManagerDatabase:
             return  # Current file details matching DB, no need to re-hash
 
         (file_name, file_type, size, mtime, sha1) = file_utils.read_file(
-                file_path / file_full_name, True)
+                file_path, True)
         new_file_id = self.select_update_file_record(
             sha1, mtime, size, file_name, file_type
         )

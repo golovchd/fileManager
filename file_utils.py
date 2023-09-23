@@ -55,6 +55,7 @@ def read_dir(dir_path: Path) -> Tuple[List[str], List[str]]:
                  if file.is_file() and not file.is_symlink()]
         dirs = [dir.name for dir in dir_path.iterdir()
                 if dir.is_dir() and not dir.is_symlink()]
+        logging.debug(f"read_dir({dir_path}) dirs: {dirs}, files: {files}")
         return files, dirs
     except PermissionError:
         logging.exception(f"read_dir failed to read {dir_path}")
