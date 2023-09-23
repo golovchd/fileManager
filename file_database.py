@@ -56,7 +56,7 @@ class FileManagerDatabase:
             self, db_path: Path, rehash_time: float, new_update: bool = False):
         self._rehash_time = rehash_time
         self._new_update = new_update
-        self._con = sqlite3.connect(db_path)
+        self._con = sqlite3.connect(db_path, timeout=10)
         # Details on current disk
         self._disk_id = None
         self._disk_uuid = None
