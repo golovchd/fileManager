@@ -110,7 +110,8 @@ def test_generate_file_sha1():
             continue
         sha1_hash = sha1()
         sha1_hash.update(file_path.read_bytes())
-        assert generate_file_sha1(file_path, 1024) == sha1_hash.hexdigest()
+        file_sha, _ = generate_file_sha1(file_path, 1024)
+        assert file_sha == sha1_hash.hexdigest()
 
 
 @pytest.mark.parametrize(
@@ -147,14 +148,14 @@ def test_read_file(
         sha1_hex: str
         ) -> None:
     (
-        read_file_name, read_file_type, read_size, _, read_sha1
+        read_file_name, read_file_type, read_size, _, read_sha1, _
     ) = read_file(TEST_DATA_DIR / file_path, True)
     assert read_file_name == file_name
     assert read_file_type == file_type
     assert read_size == size
     assert read_sha1 == sha1_hex
     (
-        read_file_name, read_file_type, read_size, _, read_sha1
+        read_file_name, read_file_type, read_size, _, read_sha1, _
     ) = read_file(TEST_DATA_DIR / file_path, False)
     assert read_file_name == file_name
     assert read_file_type == file_type
