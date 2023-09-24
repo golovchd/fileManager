@@ -125,56 +125,6 @@ class FileManagerDatabase:
         del file_type
         return None
 
-    def get_file_id(self, fsrecord_name, file_details=None):
-        """Getting file id by file's SHA1, inserting if missing."""
-        if file_details:
-            (file_name, file_type, size, mtime, sha1) = file_details
-        else:
-            (file_name, file_type, size, mtime, sha1) = file_utils.read_file(
-                self._cur_dir_path / fsrecord_name, True)
-        if not sha1:
-            return 0, mtime
-
-        logging.debug("get_file_id: name=%s, type=%s, %d, %d, %r",
-                      file_name, file_type, size, mtime, sha1)
-        for row in self._exec_query(_FILE_SELECT, (sha1,), commit=False):
-            self._exec_query(_FILE_TIME_UPDATE, (mtime, mtime, row[0]))
-            return row[0], mtime
-
-        self._exec_query(_FILE_INSERT, (
-            size, sha1, mtime, file_name, file_type,
-            self.get_media_type(file_type)))
-        return self.get_file_id(
-            fsrecord_name, (file_name, file_type, size, mtime, sha1))
-
-    def get_fsfile_id(self, fsrecord_name):
-        """Getting fsrecord id for given file in current did,
-            insert if missing."""
-        if not self._cur_dir_id:
-            raise ValueError("Missing _cur_dir_id")
-        file_id, file_mtime = self.get_file_id(fsrecord_name)
-        if not file_id:
-            logging.warning("get_fsfile_id: failed to get SHA1/file_id for %s",
-                            fsrecord_name)
-            return 0
-        for row in self._exec_query(
-                _FSRECORD_SELECT.format("NOT"),
-                (self._disk_id, self._cur_dir_id, fsrecord_name),
-                commit=False):
-            logging.debug(
-                f"get_fsfile_id: {fsrecord_name}, parent {self._cur_dir_id} = "
-                f"{row[0]}, SHA1 hash updated on %s",
-                time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(row[1])))
-            self._exec_query(_FSFILE_UPDATE,
-                             (file_mtime, file_id, time.time(), row[0]))
-            return row[0]
-
-        self._exec_query(
-            _FSFILE_INSERT,
-            (fsrecord_name, self._cur_dir_id,
-             self._disk_id, file_mtime, file_id, time.time()))
-        return self.get_fsrecord_id(fsrecord_name, self._cur_dir_id, True)
-
     def get_fsrecord_id(self, fsrecord_name, parent_id, is_file=False):
         """Getting dir id for given name/parent, generating if missing."""
         if not self._disk_id:
@@ -315,10 +265,7 @@ class FileManagerDatabase:
                 logging.warning("update_files called for symlink %s",
                                 self._cur_dir_path / file_name)
                 continue
-            if self._new_update:
-                self.update_file(file_name)
-            else:
-                self.get_fsfile_id(file_name)
+            self.update_file(file_name)
 
     def update_dir(
             self, path: Path,

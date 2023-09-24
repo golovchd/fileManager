@@ -13,13 +13,14 @@ sys.path.append(str(SCRIPT_DIR.parent))
 from file_database import FileManagerDatabase  # noqa: E402
 
 _DB_SCHEMA = SCRIPT_DIR.parent / "fileManager_schema.sql"
+_DB_TEST_DB_DUMP = SCRIPT_DIR.parent / "fileManager_test_dump.sql"
 _TEST_DB_NAME = "test.db"
 # Tables and indexes to ignore
 _TABLE_SELECT = "SELECT `ROWID`, `{}`.* FROM `{}` ORDER BY `ROWID`"
 _TABLE_COMPARE: Dict[str, List[int]] = {
     "types": [],
     "files": [],
-    "disks": [],
+    "disks": [1, 2],
     "fsrecords": [7],
 }
 
@@ -44,9 +45,9 @@ def test_error_missing_setup(tmp_path: Path) -> None:
             db.clean_cur_dir(["foo", "bar"], False)
 
 
-def create_db_from_schema(db_path: Path) -> None:
+def create_db(db_path: Path, db_dump: Path) -> None:
     connection = sqlite3.connect(db_path)
-    connection.executescript(_DB_SCHEMA.read_text())
+    connection.executescript(db_dump.read_text())
     connection.close()
 
 
@@ -72,11 +73,9 @@ def compare_db_ignore_sha_read(db1_path: Path, dg2_path: Path) -> None:
 
 def test_update_dir(tmp_path):
     db_path = tmp_path / _TEST_DB_NAME
-    create_db_from_schema(db_path)
-    with FileManagerDatabase(db_path, time.time()) as file_db:
-        file_db.update_dir(TEST_DATA_DIR, max_depth=None)
+    create_db(db_path, _DB_TEST_DB_DUMP)
     db_new_path = tmp_path / "new.db"
-    create_db_from_schema(db_new_path)
+    create_db(db_new_path, _DB_SCHEMA)
     with FileManagerDatabase(
             db_new_path, time.time(), new_update=True) as new_file_db:
         new_file_db.update_dir(TEST_DATA_DIR, max_depth=None)
@@ -85,11 +84,9 @@ def test_update_dir(tmp_path):
 
 def test_update_dir_no_hash(tmp_path):
     db_path = tmp_path / _TEST_DB_NAME
-    create_db_from_schema(db_path)
-    with FileManagerDatabase(db_path, time.time()) as file_db:
-        file_db.update_dir(TEST_DATA_DIR, max_depth=None)
+    create_db(db_path, _DB_TEST_DB_DUMP)
     db_new_path = tmp_path / "new.db"
-    create_db_from_schema(db_new_path)
+    create_db(db_new_path, _DB_SCHEMA)
     with FileManagerDatabase(
             db_new_path, time.time(), new_update=True) as new_file_db:
         new_file_db.update_dir(TEST_DATA_DIR, max_depth=None)
@@ -101,12 +98,9 @@ def test_update_dir_no_hash(tmp_path):
 
 def test_update_dir_rerun(tmp_path):
     db_path = tmp_path / _TEST_DB_NAME
-    create_db_from_schema(db_path)
-    with FileManagerDatabase(db_path, time.time()) as file_db:
-        file_db.update_dir(TEST_DATA_DIR, max_depth=None)
-        file_db.update_dir(TEST_DATA_DIR, max_depth=None)
+    create_db(db_path, _DB_TEST_DB_DUMP)
     db_new_path = tmp_path / "new.db"
-    create_db_from_schema(db_new_path)
+    create_db(db_new_path, _DB_SCHEMA)
     with FileManagerDatabase(
             db_new_path, time.time(), new_update=True) as new_file_db:
         new_file_db.update_dir(TEST_DATA_DIR, max_depth=None)
