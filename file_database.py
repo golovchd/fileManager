@@ -97,6 +97,9 @@ class FileManagerDatabase:
             self._disk_id = row[0]
             # TODO: support free disk space tracking in DB
             if row[2] != size or row[3] != label:
+                logging.warning("Size or label of disk UUID %s changed: "
+                                "%d -> %d, %s -> %s",
+                                uuid, row[2], size, row[3], label)
                 self._exec_query(_DISK_UPDATE_SIZE, (size, label, uuid))
             self._disk_uuid = row[1]
             self._disk_size = size
@@ -157,6 +160,7 @@ class FileManagerDatabase:
             cur_path_list.append(dir_name)
             cur_path = "/".join(cur_path_list)
             if cur_path in self._dir_id_cache:
+                logging.debug(f"Found {cur_path} in _dir_id_cache")
                 cur_path_id = self._dir_id_cache[cur_path]
             else:
                 cur_path_id = self.get_fsrecord_id(dir_name, cur_path_id)

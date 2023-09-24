@@ -2,7 +2,7 @@ import sqlite3
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import pytest
 
@@ -43,6 +43,21 @@ def test_error_missing_setup(tmp_path: Path) -> None:
             db.clean_cur_dir(["foo.log", "bar.txt"], True)
         with pytest.raises(ValueError):
             db.clean_cur_dir(["foo", "bar"], False)
+
+
+def test_set_disk_change(tmp_path: Path, mocker) -> None:
+    def mock_exec_query(self, sql: str, params: Tuple, commit=True):
+        yield [5, "abc", 500, "test-label"]
+
+    mocker.patch(
+        "file_database.FileManagerDatabase._exec_query", mock_exec_query)
+
+    with FileManagerDatabase(tmp_path / _TEST_DB_NAME, time.time()) as db:
+        db.set_disk("abc", 400, "new-label")
+        assert db._disk_id == 5
+        assert db._disk_uuid == "abc"
+        assert db._disk_size == 400
+        assert db._disk_label == "new-label"
 
 
 def create_db(db_path: Path, db_dump: Path) -> None:
