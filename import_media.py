@@ -6,6 +6,7 @@ import argparse
 import logging
 import os
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import exifread
 
@@ -219,7 +220,8 @@ class MediaFiles:
            self.import_list."""
         dir_list = []
         for file_name in files_list:
-            if self.is_importable(file_name):
+            if (self.is_importable(file_name) and not (
+                  Path(dir_path) / file_name).is_symlink()):
                 dir_list.append(file_name)
         dir_count = len(dir_list)
         if dir_count:

@@ -52,7 +52,7 @@ def create_db_from_schema(db_path: Path) -> None:
 
 def compare_db_ignore_sha_read(db1_path: Path, dg2_path: Path) -> None:
     connection_1 = sqlite3.connect(db1_path)
-    connection_2 = sqlite3.connect(db1_path)
+    connection_2 = sqlite3.connect(dg2_path)
     for table, excludes in _TABLE_COMPARE.items():
         res_1 = connection_1.execute(_TABLE_SELECT.format(table, table))
         res_2 = connection_2.execute(_TABLE_SELECT.format(table, table))

@@ -76,7 +76,7 @@ def generate_file_sha1(file_path: Path, blocksize: int = 2**20) -> str:
     except PermissionError:
         logging.exception(f"generate_file_sha1 failed to read {file_path}")
         return ""
-    file_size = file_path.stat(follow_symlinks=False).st_size
+    file_size = file_path.stat().st_size
     duration = clock_gettime_ns(CLOCK_MONOTONIC) - start_time
     mb_per_second = (file_size * 1000) / duration
     logging.debug(f"{file_path} size {(file_size / 1000000):.2f} MB "
@@ -88,7 +88,7 @@ def generate_file_sha1(file_path: Path, blocksize: int = 2**20) -> str:
 def read_file(
         file_path: Path, get_sha1: bool) -> Tuple[str, str, int, float, str]:
     """Returns name, type, size, mtime, sha1 of file."""
-    file_stat = file_path.stat(follow_symlinks=False)
+    file_stat = file_path.stat()
     file_name = file_path.name
     file_name_parts = file_name.split('.')
     if len(file_name_parts) > 1:

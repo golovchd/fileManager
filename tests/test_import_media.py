@@ -2,20 +2,24 @@
 """Import Media module unittests."""
 
 import argparse
-import os
+import sys
 import unittest
 from datetime import datetime
+from pathlib import Path
 
 from pyfakefs import fake_filesystem_unittest
 
-import import_media
+SCRIPT_DIR = Path(__file__).resolve().parent
+TEST_DATA_DIR = SCRIPT_DIR.parent / "test_data"
+sys.path.append(str(SCRIPT_DIR.parent))
+
+
+import import_media  # noqa: E402
 
 
 class ImportMediaFakeFsTestCase(fake_filesystem_unittest.TestCase):
     """ Fake FS based tests. """
     def setUp(self):
-        self._test_data = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), 'test_data')
         self.setUpPyfakefs()
 
     def test_file_type(self):
@@ -30,18 +34,14 @@ class ImportMediaFakeFsTestCase(fake_filesystem_unittest.TestCase):
 
 class ImportMediaTestCase(unittest.TestCase):
     """ Tests with real FS from test_data."""
-    def setUp(self):
-        self._test_data = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), 'test_data')
-
     def test_exif_time2unix(self):
         with self.assertRaises(import_media.ExifTimeError):
             import_media.exif_time2unix('2018:06:30')
         with self.assertRaises(import_media.ExifTimeError):
             test_file_date = import_media.read_file_time(
-                os.path.join(self._test_data, 'media/not_an_image'), True)
+                TEST_DATA_DIR / 'media/not_an_image', True)
         test_file_date = import_media.read_file_time(
-            os.path.join(self._test_data, 'media/DSC06979.JPG'), True)
+            TEST_DATA_DIR / 'media/DSC06979.JPG', True)
         self.assertEqual(test_file_date, datetime(2018, 2, 19, 11, 5, 43))
 
     def test_import(self):
