@@ -51,10 +51,10 @@ def get_path_disk_info(dir_path):
 def read_dir(dir_path: Path) -> Tuple[List[str], List[str]]:
     """Reading details of files and subdirs."""
     try:
-        files = [file.name for file in dir_path.iterdir()
-                 if file.is_file() and not file.is_symlink()]
-        dirs = [dir.name for dir in dir_path.iterdir()
-                if dir.is_dir() and not dir.is_symlink()]
+        files = sorted([file.name for file in dir_path.iterdir()
+                        if file.is_file() and not file.is_symlink()])
+        dirs = sorted([dir.name for dir in dir_path.iterdir()
+                       if dir.is_dir() and not dir.is_symlink()])
         logging.debug(f"read_dir({dir_path}) dirs: {dirs}, files: {files}")
         return files, dirs
     except PermissionError:

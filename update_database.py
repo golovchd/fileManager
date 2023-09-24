@@ -49,7 +49,7 @@ def main(argv):
 
     rehash_time = time.time() - args.rehash_interval * 24 * 3600
     with file_database.FileManagerDatabase(
-          args.database, rehash_time, new_update=True) as file_db:
+          args.database, rehash_time) as file_db:
         file_db.update_dir(args.media, max_depth=args.max_depth)
 
 

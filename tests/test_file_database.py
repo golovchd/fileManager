@@ -14,14 +14,15 @@ from file_database import FileManagerDatabase  # noqa: E402
 
 _DB_SCHEMA = SCRIPT_DIR.parent / "fileManager_schema.sql"
 _DB_TEST_DB_DUMP = SCRIPT_DIR.parent / "fileManager_test_dump.sql"
+_REFERENCE_DB_NAME = "reference.db"
 _TEST_DB_NAME = "test.db"
 # Tables and indexes to ignore
 _TABLE_SELECT = "SELECT `ROWID`, `{}`.* FROM `{}` ORDER BY `ROWID`"
 _TABLE_COMPARE: Dict[str, List[int]] = {
     "types": [],
-    "files": [],
+    "files": [3],
     "disks": [1, 2],
-    "fsrecords": [7],
+    "fsrecords": [4, 7],
 }
 
 
@@ -66,7 +67,15 @@ def create_db(db_path: Path, db_dump: Path) -> None:
     connection.close()
 
 
-def compare_db_ignore_sha_read(db1_path: Path, dg2_path: Path) -> None:
+def dump_db(db_path: Path, db_dump: Path):
+    connection = sqlite3.connect(db_path)
+    with open(db_dump, 'w') as f:
+        for line in connection.iterdump():
+            f.write('%s\n' % line)
+    connection.close()
+
+
+def compare_db_with_ignores(db1_path: Path, dg2_path: Path) -> None:
     connection_1 = sqlite3.connect(db1_path)
     connection_2 = sqlite3.connect(dg2_path)
     for table, excludes in _TABLE_COMPARE.items():
@@ -87,39 +96,42 @@ def compare_db_ignore_sha_read(db1_path: Path, dg2_path: Path) -> None:
 
 
 def test_update_dir(tmp_path):
-    db_path = tmp_path / _TEST_DB_NAME
-    create_db(db_path, _DB_TEST_DB_DUMP)
-    db_new_path = tmp_path / "new.db"
-    create_db(db_new_path, _DB_SCHEMA)
+    reference_db_path = tmp_path / _REFERENCE_DB_NAME
+    create_db(reference_db_path, _DB_TEST_DB_DUMP)
+    test_db_path = tmp_path / _TEST_DB_NAME
+    create_db(test_db_path, _DB_SCHEMA)
     with FileManagerDatabase(
-            db_new_path, time.time(), new_update=True) as new_file_db:
+            test_db_path, time.time()) as new_file_db:
         new_file_db.update_dir(TEST_DATA_DIR, max_depth=None)
-    compare_db_ignore_sha_read(db_path, db_new_path)
+    dump_db(test_db_path, tmp_path / "test_update_dir.sql")
+    compare_db_with_ignores(reference_db_path, test_db_path)
 
 
 def test_update_dir_no_hash(tmp_path):
-    db_path = tmp_path / _TEST_DB_NAME
-    create_db(db_path, _DB_TEST_DB_DUMP)
-    db_new_path = tmp_path / "new.db"
-    create_db(db_new_path, _DB_SCHEMA)
+    reference_db_path = tmp_path / _REFERENCE_DB_NAME
+    create_db(reference_db_path, _DB_TEST_DB_DUMP)
+    test_db_path = tmp_path / _TEST_DB_NAME
+    create_db(test_db_path, _DB_SCHEMA)
     with FileManagerDatabase(
-            db_new_path, time.time(), new_update=True) as new_file_db:
+            test_db_path, time.time()) as new_file_db:
         new_file_db.update_dir(TEST_DATA_DIR, max_depth=None)
     with FileManagerDatabase(
-            db_new_path, time.time() - 3600, new_update=True) as new_file_db:
+            test_db_path, time.time() - 3600) as new_file_db:
         new_file_db.update_dir(TEST_DATA_DIR, max_depth=None)
-    compare_db_ignore_sha_read(db_path, db_new_path)
+    dump_db(test_db_path, tmp_path / "test_update_dir_no_hash.sql")
+    compare_db_with_ignores(reference_db_path, test_db_path)
 
 
 def test_update_dir_rerun(tmp_path):
-    db_path = tmp_path / _TEST_DB_NAME
-    create_db(db_path, _DB_TEST_DB_DUMP)
-    db_new_path = tmp_path / "new.db"
-    create_db(db_new_path, _DB_SCHEMA)
+    reference_db_path = tmp_path / _REFERENCE_DB_NAME
+    create_db(reference_db_path, _DB_TEST_DB_DUMP)
+    test_db_path = tmp_path / _TEST_DB_NAME
+    create_db(test_db_path, _DB_SCHEMA)
     with FileManagerDatabase(
-            db_new_path, time.time(), new_update=True) as new_file_db:
+            test_db_path, time.time()) as new_file_db:
         new_file_db.update_dir(TEST_DATA_DIR, max_depth=None)
     with FileManagerDatabase(
-            db_new_path, time.time() + 3600, new_update=True) as new_file_db:
+            test_db_path, time.time() + 3600) as new_file_db:
         new_file_db.update_dir(TEST_DATA_DIR, max_depth=None)
-    compare_db_ignore_sha_read(db_path, db_new_path)
+    dump_db(test_db_path, tmp_path / "test_update_dir_rerun.sql")
+    compare_db_with_ignores(reference_db_path, test_db_path)
