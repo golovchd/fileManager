@@ -343,6 +343,31 @@ class FileManagerDatabase:
             total_hash_time += hash_time
         return hashed_size, total_size, total_hash_time
 
+    def print_statistic(
+                self, path: Path, start_time_ns: int,
+                files_count: int, files_hashed_size: int,
+                files_total_size: int, files_hash_time_ns: int,
+            ) -> None:
+        """Calculates and prints dir processing statistic."""
+        process_time_ns = clock_gettime_ns(CLOCK_MONOTONIC) - start_time_ns
+        average_process_speed = (files_total_size * 1E3) / process_time_ns
+        if files_hash_time_ns:
+            average_hash_time = (files_hashed_size * 1E3) / files_hash_time_ns
+        else:
+            average_hash_time = 0
+        hashing_size_pct = (100 * files_hashed_size / files_total_size
+                            if files_total_size else 0)
+        hashing_time_pct = 100 * files_hash_time_ns / process_time_ns
+        logging.info(f"Processed {path} in {process_time_ns / 1E9:.2f} sec, "
+                     f"{files_count} files, "
+                     f"total size {files_total_size / 1E6:.2f} MB, "
+                     f"{average_process_speed:.2f} MB/sec.")
+        logging.info(f"In {path} hashed {hashing_size_pct:.1f}% by size, "
+                     f"{hashing_time_pct:.1f}% by time, "
+                     f"{files_hashed_size / 1E6:.2f} MB in "
+                     f"{files_hash_time_ns / 1E9:.2f} sec, "
+                     f"{average_hash_time:.2f} MB/sec.")
+
     def update_dir(
             self, path: Path,
             max_depth: Optional[int] = 0, check_disk: bool = True
@@ -378,24 +403,8 @@ class FileManagerDatabase:
                 files_hashed_size += dir_hashed_size
                 files_total_size += dir_size
                 files_hash_time_ns += hash_time_ns
-        process_time_ns = clock_gettime_ns(CLOCK_MONOTONIC) - start_time
-        average_process_speed = (files_total_size * 1E3) / process_time_ns
-        if files_hash_time_ns:
-            average_hash_time = (files_hashed_size * 1E3) / files_hash_time_ns
-        else:
-            average_hash_time = 0
-        hashing_size_pct = (100 * files_hashed_size / files_total_size
-                            if files_total_size else 0)
-        hashing_time_pct = 100 * files_hash_time_ns / process_time_ns
-        logging.info(f"Processed {path} in {process_time_ns / 1E9:.2f} sec, "
-                     f"{files_count} files, "
-                     f"total size {files_total_size / 1E6:.2f} MB, "
-                     f"{average_process_speed:.2f} MB/sec.")
-        logging.info(f"In {path} hashed {hashing_size_pct:.1f}% by size, "
-                     f"{hashing_time_pct:.1f}% by time, "
-                     f"{files_hashed_size / 1E6:.2f} MB in "
-                     f"{files_hash_time_ns / 1E9:.2f} sec, "
-                     f"{average_hash_time:.2f} MB/sec.")
+        self.print_statistic(path, start_time, files_count, files_hashed_size,
+                             files_total_size, files_hash_time_ns)
         return (
             files_count, files_hashed_size,
             files_total_size, files_hash_time_ns
