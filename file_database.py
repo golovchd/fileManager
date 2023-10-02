@@ -7,8 +7,10 @@ from time import CLOCK_MONOTONIC, clock_gettime_ns, time
 from typing import Dict, List, Optional, Tuple
 
 import file_utils
+from utils import timestamp2exif_str
 
 DEFAULT_DATABASE_NAME = "fileManager.db"
+_MAX_ORFAN_SEARCH_DEPTH = 256
 
 _DISK_SELECT = ("SELECT `ROWID`, `UUID`, `DiskSize`, `Label`"
                 " FROM `disks` WHERE UUID = ?")
@@ -32,6 +34,13 @@ _FSFILE_UPDATE = ("UPDATE `fsrecords` SET `FileDate` = ?, `FileId` = ?, "
 _DIR_CLEAN = ("DELETE FROM `fsrecords` WHERE `DiskId` = ? AND"
               " `ParentId` = ? AND `FileId` IS {} NULL")
 _DIR_CLEAN_NAMES = " AND `Name` NOT IN (?"
+_FSFILE_DELETE = ("DELETE FROM `fsrecords` WHERE `ROWID` IN (?")
+_FS_ORFANS_SELECT = ("SELECT `child`.`ROWID`, `child`.`Name`, `parent`.`Name` "
+                     "FROM `fsrecords` AS `child` "
+                     "LEFT JOIN `fsrecords` AS `parent` "
+                     "ON `parent`.ROWID = `child`.`ParentId` "
+                     "WHERE `child`.`ParentId` IS NOT NULL "
+                     "ORDER BY `child`.`ROWID`")
 
 _FILE_SELECT = ("SELECT `ROWID`, `EarliestDate`, `CanonicalName`, "
                 "`CanonicalType`, `MediaType` FROM `files` WHERE `SHA1` = ?")
@@ -40,6 +49,17 @@ _FILE_TIME_UPDATE = ("UPDATE `files` SET `EarliestDate` = ? WHERE "
 _FILE_INSERT = ("INSERT INTO `files` (`FileSize`, `SHA1`, `EarliestDate`, "
                 "`CanonicalName`, `CanonicalType`, `MediaType`) "
                 "VALUES (?, ?, ?, ?, ?, ?)")
+_FILE_ORFANS_SELECT = ("SELECT `files`.`ROWID`,`CanonicalName`, "
+                       "`CanonicalType`, `FileSize`, `SHA1`, `EarliestDate`,"
+                       "COUNT(DISTINCT `fsrecords`.`ROWID`) as `ref_count` "
+                       "FROM `files` "
+                       "LEFT JOIN `fsrecords` "
+                       "ON `files`.`ROWID` = `fsrecords`.`FileId` "
+                       "GROUP BY `files`.`ROWID`, `CanonicalName`, "
+                       "`CanonicalType`, `EarliestDate`, `SHA1`, `FileSize`"
+                       "ORDER BY `ref_count`, `files`.`ROWID`")
+_FILE_DELETE = ("DELETE FROM `files` WHERE `ROWID` IN (?")
+
 _FS_FILE_SELECT = ("SELECT `fsrecords`.`ROWID`, `fsrecords`.`SHA1ReadDate`, "
                    "`fsrecords`.`FileDate`, `files`.`ROWID`, "
                    "`files`.`FileSize`, `SHA1`"
@@ -89,6 +109,50 @@ class FileManagerDatabase:
         except sqlite3.OperationalError as e:
             logging.exception("SQL failed: %s with %r", sql, params)
             raise e
+
+    def handle_file_orfans(self, clear_orfan_files: bool = False) -> int:
+        """Searching for orfans in files."""
+        orfans_count = 0
+        orfans_list = []
+        for row in self._exec_query(_FILE_ORFANS_SELECT, (), commit=False):
+            if not row[6]:
+                logging.warning(
+                    f"Found orpfan file {row[1]}.{row[2]} size {row[3]}, SHA1 "
+                    f"{row[4]}, earliest date {timestamp2exif_str(row[5])}")
+                if clear_orfan_files:
+                    orfans_list.append(row[0])
+                orfans_count += 1
+        if orfans_list:
+            self._exec_query(
+                _FILE_DELETE + ", ?" * (len(orfans_list) - 1) + ")",
+                tuple(orfans_list), commit=True)
+        return orfans_count
+
+    def handle_orfans(self, clear_orfan_files: bool = False):
+        """Removes fsrecords and file orfans."""
+        for i in range(_MAX_ORFAN_SEARCH_DEPTH):
+            count = self.remove_fsrecords_orfans()
+            logging.info(f"handle_orfans: Round {i} removed "
+                         f"{count} orfans from fsrecords")
+            if not count:
+                break
+        self.handle_file_orfans(clear_orfan_files=clear_orfan_files)
+
+    def remove_fsrecords_orfans(self) -> int:
+        """Removes one level of fsrecords orfans."""
+        orfans_count = 0
+        orfans_list = []
+        for row in self._exec_query(_FS_ORFANS_SELECT, (), commit=False):
+            if row[2] is None:
+                logging.warning(f"Found fsrecors file {row} to be deleted")
+                orfans_list.append(row[0])
+                orfans_count += 1
+        if orfans_list:
+            logging.warning(f"remove_fsrecords_orfans: {orfans_list}")
+            self._exec_query(
+                _FSFILE_DELETE + ", ?" * (len(orfans_list) - 1) + ")",
+                tuple(orfans_list), commit=True)
+        return orfans_count
 
     def set_disk(self, uuid, size, label):
         """Create/update disk details in DB."""
@@ -200,8 +264,7 @@ class FileManagerDatabase:
                 _FS_FILE_SELECT, (self._disk_id, self._cur_dir_id, file_name),
                 commit=False):
             return row[0], row[1], row[2], row[3], row[4], row[5]
-        else:
-            return 0, 0, 0, 0, 0, ""
+        return 0, 0, 0, 0, 0, ""
 
     def select_file_id(self, sha1: str, mtime: float) -> int:
         """Selects file_id (files.ROWID) by SHA, updates mtime if needed."""

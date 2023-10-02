@@ -39,8 +39,8 @@ def main(argv):
     arg_parser.add_argument("-v", "--verbose",
                             help="Print verbose output",
                             action="count", default=0)
-    arg_parser.add_argument("--dry_run",
-                            help="Print action instead of executing it",
+    arg_parser.add_argument("-c", "--clear-orfan-files",
+                            help="Clear orfan file records",
                             action="store_true", default=False)
     args = arg_parser.parse_args(argv[1:])
     logging.basicConfig(
@@ -51,6 +51,7 @@ def main(argv):
     with file_database.FileManagerDatabase(
           args.database, rehash_time) as file_db:
         file_db.update_dir(args.media, max_depth=args.max_depth)
+        file_db.handle_orfans(clear_orfan_files=args.clear_orfan_files)
 
 
 if __name__ == "__main__":

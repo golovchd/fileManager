@@ -32,9 +32,9 @@ CREATE TABLE "fsrecords" (
 	"FileId"	INTEGER,
 	"ParentPath"	TEXT,
 	"SHA1ReadDate"	INTEGER,
-	FOREIGN KEY("FileId") REFERENCES "files"("ROWID") ON DELETE CASCADE,
-	FOREIGN KEY("DiskId") REFERENCES "disks"("ROWID") ON DELETE CASCADE,
-	FOREIGN KEY("ParentId") REFERENCES "fsrecords"("ROWID") ON DELETE CASCADE
+	FOREIGN KEY("FileId") REFERENCES "files"("ROWID") ON DELETE RESTRICT,
+	FOREIGN KEY("DiskId") REFERENCES "disks"("ROWID") ON DELETE RESTRICT,
+	FOREIGN KEY("ParentId") REFERENCES "fsrecords"("ROWID") ON DELETE SET NULL
 );
 INSERT INTO "fsrecords" VALUES('',NULL,1,NULL,NULL,NULL,NULL);
 INSERT INTO "fsrecords" VALUES('home',1,1,NULL,NULL,NULL,NULL);
@@ -80,7 +80,4 @@ CREATE INDEX "disk_size" ON "disks" (
 CREATE INDEX "parent_id" ON "fsrecords" (
 	"ParentId"	ASC
 );
-CREATE TRIGGER `fsrecords_on_delete` AFTER DELETE ON `fsrecords` BEGIN
-	DELETE FROM `fsrecords` WHERE `ParentId` = old.`ROWID`;
-END;
 COMMIT;

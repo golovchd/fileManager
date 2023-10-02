@@ -25,8 +25,8 @@ CREATE TABLE IF NOT EXISTS "fsrecords" (
 	"FileId"	INTEGER,
 	"ParentPath"	TEXT,
 	"SHA1ReadDate"	INTEGER,
-	FOREIGN KEY("FileId") REFERENCES "files"("ROWID") ON DELETE CASCADE,
-	FOREIGN KEY("DiskId") REFERENCES "disks"("ROWID") ON DELETE CASCADE,
+	FOREIGN KEY("FileId") REFERENCES "files"("ROWID") ON DELETE RESTRICT,
+	FOREIGN KEY("DiskId") REFERENCES "disks"("ROWID") ON DELETE RESTRICT,
 	FOREIGN KEY("ParentId") REFERENCES "fsrecords"("ROWID") ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS "file_size" ON "files" (
@@ -47,7 +47,4 @@ CREATE INDEX IF NOT EXISTS "disk_size" ON "disks" (
 CREATE INDEX IF NOT EXISTS "parent_id" ON "fsrecords" (
 	"ParentId"	ASC
 );
-CREATE TRIGGER `fsrecords_on_delete` AFTER DELETE ON `fsrecords` BEGIN
-	DELETE FROM `fsrecords` WHERE `ParentId` = old.`ROWID`;
-END;
 COMMIT;

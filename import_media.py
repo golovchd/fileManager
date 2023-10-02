@@ -10,6 +10,8 @@ from pathlib import Path
 
 import exifread
 
+from utils import float2timestamp, timeobj2exif_str
+
 _COMPARE_TIME_DIFF = timedelta(2)  # 2 days
 
 
@@ -43,16 +45,6 @@ def exif_time2unix(exif_time):
                     int(exif_time_parts[5]))
 
 
-def float2timestamp(float_timestamp):
-    """Converts POSIX timestamp to datetime.datetime object."""
-    return datetime.fromtimestamp(float_timestamp)
-
-
-def timestamp2exif_str(timestamp_obj):
-    """Converts datetime.datetime object to exif_time."""
-    return timestamp_obj.strftime('%Y:%m:%d %H:%M:%S')
-
-
 def read_file_time(file_name, exif_only=False):
     """Returns file's time from exif or from mtime."""
     file_time = None
@@ -69,7 +61,7 @@ def read_file_time(file_name, exif_only=False):
         file_timestamp = float2timestamp(os.stat(file_name).st_mtime)
         logging.debug(
             f"{file_name} mtime as file_time "
-            f"{timestamp2exif_str(file_timestamp)}")
+            f"{timeobj2exif_str(file_timestamp)}")
     else:
         file_timestamp = exif_time2unix(file_time)
         logging.debug(f"{file_name} exif as file_time {file_time}")
@@ -119,7 +111,7 @@ def compare_files(file_name_1, dir_path_1, dir_path_2, file_name_2=None):
     mtime_2 = float2timestamp(stat_2.st_mtime)
     if exif_time_1 - mtime_2 > _COMPARE_TIME_DIFF:
         logging.debug(
-            f"second file {file_path_2} too old {timestamp2exif_str(mtime_2)}")
+            f"second file {file_path_2} too old {timeobj2exif_str(mtime_2)}")
         return False
     return exif_time_1 == read_file_time(file_path_2)
 
