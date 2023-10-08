@@ -3,14 +3,14 @@
 import logging
 from pathlib import Path
 from time import time
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import file_utils
 from db_utils import SQLite3connection
 from utils import timestamp2exif_str
 
-_DISK_SELECT = ("SELECT `ROWID`, `UUID`, `DiskSize`, `Label`"
-                " FROM `disks` WHERE UUID = ?")
+DISK_SELECT = ("SELECT `ROWID`, `UUID`, `DiskSize`, `Label`"
+               " FROM `disks` WHERE UUID = ?")
 _DISK_UPDATE_SIZE = ("UPDATE `disks` SET `DiskSize` = ?, `Label` = ?"
                      " WHERE `ROWID` = ?")
 _DISK_INSERT = ("INSERT INTO `disks` (`UUID`, `DiskSize`, `Label`) "
@@ -74,10 +74,10 @@ class FileManagerDatabase(SQLite3connection):
         super().__init__(db_path)
         self._rehash_time = rehash_time
         # Details on current disk
-        self._disk_id = None
-        self._disk_uuid = None
-        self._disk_size = None
-        self._disk_label = None
+        self._disk_id: Optional[int] = None
+        self._disk_uuid: Optional[str] = None
+        self._disk_size: Optional[int] = None
+        self._disk_label: Optional[str] = None
         # Ref to top dir on disk of the current dir
         self._top_dir_id: int = 0
         self._dir_id_cache: Dict[str, int] = {}
@@ -118,19 +118,22 @@ class FileManagerDatabase(SQLite3connection):
                 tuple(orfans_list), commit=True)
         return orfans_count
 
-    def set_disk(self, uuid, size, label):
+    def _set_disk(self, id: int, uuid: str, size: int, label: str) -> None:
+        self._disk_id = id
+        self._disk_uuid = uuid
+        self._disk_size = size
+        self._disk_label = label
+
+    def set_disk(self, uuid: str, size: int, label: str) -> None:
         """Create/update disk details in DB."""
-        for row in self._exec_query(_DISK_SELECT, (uuid,), commit=False):
-            self._disk_id = row[0]
+        for row in self._exec_query(DISK_SELECT, (uuid,), commit=False):
+            self._set_disk(row[0], row[1], size, label)
             # TODO: support free disk space tracking in DB
             if row[2] != size or row[3] != label:
                 logging.warning("Size or label of disk UUID %s changed: "
                                 "%d -> %d, %s -> %s",
                                 uuid, row[2], size, row[3], label)
                 self._exec_query(_DISK_UPDATE_SIZE, (size, label, uuid))
-            self._disk_uuid = row[1]
-            self._disk_size = size
-            self._disk_label = label
             self.set_top_dir()
             break
         else:
