@@ -28,6 +28,11 @@ def test_get_mount_path():
     "test_dir_path, mount_path, expected_result",
     [
         (
+            Path("/media/disk"),
+            Path("/media/disk"),
+            [""]
+        ),
+        (
             Path("/media/disk/DCIM/DCIM0001"),
             Path("/media/disk"),
             ["DCIM", "DCIM0001"]
