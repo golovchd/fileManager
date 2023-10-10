@@ -5,21 +5,38 @@ import argparse
 import logging
 import sys
 from pathlib import Path
+from typing import Dict, List, Tuple
 
 from file_database import DISK_SELECT, FileManagerDatabase
 
 DEFAULT_DATABASE = Path("/var/lib/file-manager/fileManager.db")
 
-DISK_SELECT_LABEL = ("SELECT `ROWID`, `UUID`, `DiskSize`, `Label`"
-                     " FROM `disks` WHERE Label = ?")
+DEFAULT_MIN_SIZE = 1000000  # 1 MB
+
+DISK_SELECT_LABEL = ("SELECT `ROWID`, `UUID`, `DiskSize`, `Label` "
+                     "FROM `disks` WHERE `Label` = ?")
+DUPLICATES_FOLDERS = ("SELECT * FROM "
+                      "(SELECT `FileId`, COUNT(*) AS `FileCount`, "
+                      "GROUP_CONCAT(`ParentId`) AS `Parents`"
+                      "FROM `fsrecords` "
+                      "INNER JOIN `files` ON `files`.ROWID = `FileId` "
+                      "WHERE `FileId` IS NOT NULL "
+                      "AND `DiskId` = ? AND `FileSize` > ? "
+                      "GROUP BY `FileId`) "
+                      "WHERE `FileCount` > 1 "
+                      "ORDER BY `Parents` ASC, `FileCount`")
+SELECT_DIR_FILES = ("SELECT `ROWID`, `FileId`, `ParentId` FROM `fsrecords` "
+                    "WHERE `ParentId` IN (?, ?) "
+                    "ORDER BY `ParentId`, `FileId`")
 
 
 class FileDuplicates(FileManagerDatabase):
     """Representation of fileManager database and relevant queries."""
 
     def __init__(
-            self, db_path: Path):
+            self, db_path: Path, min_size: int):
         super().__init__(db_path, 0)
+        self._min_size = min_size
 
     def set_disk(self, uuid: str, size: int, label: str) -> None:
         del size
@@ -42,8 +59,68 @@ class FileDuplicates(FileManagerDatabase):
             f"Processing disk id={self._disk_id}, size={self._disk_size}, "
             f"label={self._disk_label}, UUID={self._disk_uuid}")
 
+    def compare_dirs(
+            self, dir_a: int, dir_b: int, max_diff: int
+            ) -> Dict[str, Tuple[List[int], List[int]]]:
+        dir_a_files = []
+        dir_b_files = []
+        logging.debug(f"comparing Dir pair {dir_a},{dir_b} for "
+                      f"max {max_diff} diff files")
+        for row in self._exec_query(SELECT_DIR_FILES,
+                                    (dir_a, dir_b),
+                                    commit=False):
+            if row[2] == dir_a:
+                dir_a_files.append(row[1])
+            else:
+                dir_b_files.append(row[1])
+        if dir_a_files == dir_b_files:
+            logging.info(f"Dir {dir_a} is matching {dir_a} with 0 differences")
+            return {f"{dir_a},{dir_b}": ([], [])}
+
+        a_not_b = [a for a in dir_a_files if a not in dir_b_files]
+        b_not_a = [b for b in dir_b_files if b not in dir_a_files]
+        if not a_not_b:
+            logging.info(f"Dir {dir_a} contained in {dir_b}")
+            return {f"{dir_a},{dir_b}": (a_not_b, b_not_a)}
+        if not b_not_a:
+            logging.info(f"Dir {dir_b} contained in {dir_a}")
+            return {f"{dir_a},{dir_b}": (a_not_b, b_not_a)}
+
+        diff_count = len(a_not_b) + len(b_not_a)
+        if diff_count <= max_diff:
+            logging.info(f"Dir {dir_a} is matching {dir_b} with "
+                         f"{diff_count} differences")
+            return {f"{dir_a},{dir_b}": (a_not_b, b_not_a)}
+        if len(a_not_b) <= max_diff:
+            logging.info(f"Dir {dir_a} contained in {dir_b} with "
+                         f"all but {len(a_not_b)} files")
+            return {f"{dir_a},{dir_b}": (a_not_b, b_not_a)}
+        if len(b_not_a) <= max_diff:
+            logging.info(f"Dir {dir_b} contained in {dir_a} with "
+                         f"all but {len(b_not_a)} files")
+            return {f"{dir_a},{dir_b}": (a_not_b, b_not_a)}
+        logging.debug(f"Dir {dir_a} different from {dir_b} with "
+                      f"{diff_count} differences")
+        return {}
+
     def search_duplicate_folders(self, max_diff: int) -> None:
-        pass
+        checked_dirs = {}
+        duplicate_dirs = {}
+        for row in self._exec_query(DUPLICATES_FOLDERS,
+                                    (self._disk_id, self._min_size),
+                                    commit=False):
+            logging.debug(f"File {row[0]} have {row[1]} duplicates in "
+                          f"folders {row[2]}")
+            dirs = sorted(row[2].split(","))
+            for i in range(0, len(dirs)):
+                for j in range(i + 1, len(dirs)):
+                    if f"{dirs[i]},{dirs[j]}" in checked_dirs:
+                        logging.debug(
+                            f"Dir pair {dirs[i]},{dirs[j]} was tested before")
+                        continue
+                    duplicate_dirs.update(self.compare_dirs(
+                        dirs[i], dirs[j], max_diff))
+                    checked_dirs[f"{dirs[i]},{dirs[j]}"] = True
 
 
 def main(argv):
@@ -62,10 +139,15 @@ def main(argv):
         required=False,
         default=DEFAULT_DATABASE)
     arg_parser.add_argument(
-        "--max-diff",
+        "-d", "--max-diff",
         type=int,
         help="Number of different files to consider as duplicate.",
         default=0)
+    arg_parser.add_argument(
+        "-s", "--min-size",
+        type=int,
+        help="Minimum size of the file to check duplicate.",
+        default=DEFAULT_MIN_SIZE)
     arg_parser.add_argument("-v", "--verbose",
                             help="Print verbose output",
                             action="count", default=0)
@@ -74,7 +156,7 @@ def main(argv):
         format="%(asctime)s [%(levelname)s] %(message)s",
         level=logging.WARNING - 10 * (args.verbose if args.verbose < 3 else 2))
 
-    with FileDuplicates(args.database) as file_db:
+    with FileDuplicates(args.database, args.min_size) as file_db:
         file_db.set_disk(args.uuid, 0, args.label)
         file_db.search_duplicate_folders(args.max_diff)
 
