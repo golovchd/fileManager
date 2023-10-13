@@ -8,6 +8,8 @@ from pathlib import Path
 from time import CLOCK_MONOTONIC, clock_gettime_ns
 from typing import List, Tuple
 
+_IGNORED_DIRS = [".", "..", "$RECYCLE.BIN"]
+
 
 def get_full_dir_path(path: Path) -> Path:
     """Converting path to absolute path to dir."""
@@ -29,7 +31,10 @@ def get_mount_path(dir_path: Path) -> Path:
 def get_path_from_mount(dir_path: Path) -> List[str]:
     """Returning list dir from mount point to current."""
     relative_from_mount = dir_path.relative_to(get_mount_path(dir_path))
-    return str(relative_from_mount).split('/')
+    print(dir_path, get_mount_path(dir_path), relative_from_mount)
+    if relative_from_mount == Path("."):
+        return [""]
+    return str(relative_from_mount).split("/")
 
 
 def get_path_disk_info(dir_path):
@@ -54,7 +59,8 @@ def read_dir(dir_path: Path) -> Tuple[List[str], List[str]]:
         files = sorted([file.name for file in dir_path.iterdir()
                         if file.is_file() and not file.is_symlink()])
         dirs = sorted([dir.name for dir in dir_path.iterdir()
-                       if dir.is_dir() and not dir.is_symlink()])
+                       if dir.is_dir() and not dir.is_symlink() and
+                       dir.name not in _IGNORED_DIRS])
         logging.debug(f"read_dir({dir_path}) dirs: {dirs}, files: {files}")
         return files, dirs
     except PermissionError:
