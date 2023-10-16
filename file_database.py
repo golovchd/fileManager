@@ -6,8 +6,10 @@ from time import time
 from typing import Dict, List, Optional, Tuple
 
 import file_utils
-from db_utils import SQLite3connection
+from db_utils import SQLite3connection, get_parent_path
 from utils import timestamp2exif_str
+
+_MAX_DIR_DEPTH = 256
 
 DISK_SELECT = ("SELECT `ROWID`, `UUID`, `DiskSize`, `Label`"
                " FROM `disks` WHERE UUID = ?")
@@ -64,6 +66,14 @@ _FS_FILE_SELECT = ("SELECT `fsrecords`.`ROWID`, `fsrecords`.`SHA1ReadDate`, "
                    " ON `files`.`ROWID` = `fsrecords`.`FileId`"
                    " WHERE `DiskId` = ? AND `ParentId` = ? AND `Name` = ?"
                    " AND `FileId` IS NOT NULL")
+_FS_ROOT_SELECT = ("SELECT `fsrecords`.`ROWID` FROM `fsrecords` "
+                   "WHERE `ParentId` IS NULL AND `FileId` IS NULL")
+_FS_CHILDREN_SELECT = ("SELECT "
+                       "`ROWID`, `ParentId`, `Name`, `ParentPath`, `FileId` "
+                       "FROM `fsrecords` WHERE `ParentId` IN (?{}) "
+                       "ORDER BY `ParentId`, `Name`")
+_FS_PARENT_UPDATE = ("UPDATE `fsrecords` SET `ParentPath` = ? "
+                     "WHERE `ParentId` = ?")
 
 
 class FileManagerDatabase(SQLite3connection):
@@ -117,6 +127,46 @@ class FileManagerDatabase(SQLite3connection):
                 _FSFILE_DELETE + ", ?" * (len(orfans_list) - 1) + ")",
                 tuple(orfans_list), commit=True)
         return orfans_count
+
+    def check_set_parent_path(self, dry_run: bool = True) -> int:
+        """Checks parent path starting from root of each disk."""
+        level_dirs = {}
+        updated_records = 0
+        for row in self._exec_query(_FS_ROOT_SELECT, (), commit=False):
+            level_dirs[row[0]] = ("", "", None)
+        for i in range(_MAX_DIR_DEPTH):
+            logging.info(f"Processing depth {i} for {len(level_dirs)} dirs")
+            parent_ids = level_dirs.keys()
+            if not parent_ids:
+                logging.info(f"Maximum dir depth was {i - 1}")
+                return updated_records
+            new_level_dirs = {}
+            parent_process = {}
+            for row in self._exec_query(
+                    _FS_CHILDREN_SELECT.format(", ?" * (len(parent_ids) - 1)),
+                    tuple(parent_ids), commit=False):
+                expected_parent_path = get_parent_path(*level_dirs[row[1]])
+                if expected_parent_path != row[3]:
+                    logging.warning(
+                            f"Parent Path for {row[2]} id={row[0]} is {row[3]}"
+                            f", not matching expected {expected_parent_path}")
+                    parent_process[row[1]] = (expected_parent_path, row[1])
+                    updated_records += 1
+                if not row[4]:
+                    new_level_dirs[row[0]] = (
+                            row[2], expected_parent_path, row[1])
+            level_dirs = new_level_dirs
+            if dry_run:
+                continue
+            for id, params in parent_process.items():
+                logging.info(
+                    f"Updating Parent Path for children of {id} to {params[0]}"
+                )
+                self._exec_query(_FS_PARENT_UPDATE, params, commit=True)
+        logging.warning(
+            f"Failed to process all dirs due to max depth {_MAX_DIR_DEPTH}, "
+            f"deepest known level dirs: {level_dirs}")
+        return updated_records
 
     def _set_disk(self, id: int, uuid: str, size: int, label: str) -> None:
         self._disk_id = id

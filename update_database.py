@@ -43,6 +43,13 @@ def main(argv):
     arg_parser.add_argument("-c", "--clear-orfan-files",
                             help="Clear orfan file records",
                             action="store_true", default=False)
+    parents_check = arg_parser.add_mutually_exclusive_group()
+    parents_check.add_argument("--check-parents",
+                               help="Execute check parents only",
+                               action="store_true", default=False)
+    parents_check.add_argument("--fix-parents",
+                               help="Execute check and fix parents",
+                               action="store_true", default=False)
     args = arg_parser.parse_args(argv[1:])
     logging.basicConfig(
         format="%(asctime)s [%(levelname)s] %(message)s",
@@ -51,6 +58,9 @@ def main(argv):
     rehash_time = time.time() - args.rehash_interval * 24 * 3600
     with FileDatabaseUpdater(
           args.database, rehash_time) as file_db:
+        if args.check_parents or args.fix_parents:
+            file_db.check_set_parent_path(dry_run=args.check_parents)
+            return
         file_db.update_dir(args.media, max_depth=args.max_depth)
         file_db.handle_orfans(clear_orfan_files=args.clear_orfan_files)
 

@@ -27,6 +27,18 @@ def dump_db(db_path: Path, db_dump: Path):
     connection.close()
 
 
+def get_parent_path(name: str, path: str, id) -> str:
+    """Constructs valid parent path from name, path and id."""
+    if id is None:
+        return ""
+    if not path:
+        return name
+    if not name:
+        raise ValueError(
+            f"Unexpected empty name for id={id} and parent path {path}")
+    return f"{path}/{name}"
+
+
 def compare_db_with_ignores(db1_path: Path, dg2_path: Path) -> None:
     connection_1 = sqlite3.connect(db1_path)
     connection_2 = sqlite3.connect(dg2_path)
