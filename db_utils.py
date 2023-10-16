@@ -9,7 +9,7 @@ TABLE_COMPARE: Dict[str, List[int]] = {
     "types": [],
     "files": [3],
     "disks": [1, 2],
-    "fsrecords": [4, 7],
+    "fsrecords": [4, 6],
 }
 
 
