@@ -6,7 +6,7 @@ from time import time
 from typing import Dict, List, Optional, Tuple
 
 import file_utils
-from db_utils import SQLite3connection
+from db_utils import SQLite3connection, get_full_path
 from utils import timestamp2exif_str
 
 DISK_SELECT = ("SELECT `ROWID`, `UUID`, `DiskSize`, `Label`"
@@ -21,6 +21,8 @@ _TOP_DIR_SELECT = ("SELECT `ROWID` FROM `fsrecords` WHERE `DiskId` = ? AND"
 _FSRECORD_SELECT = ("SELECT `ROWID`, `SHA1ReadDate` FROM `fsrecords` WHERE"
                     " `DiskId` = ? AND `ParentId` = ? AND `Name` = ? AND"
                     " `FileId` IS {} NULL")
+_DIR_PARENT_SELECT = ("SELECT `ParentId`, `Name` FROM `fsrecords` "
+                      "WHERE `ROWID` = ?")
 _FSDIR_INSERT = ("INSERT INTO `fsrecords` (`Name`, `ParentId`, `DiskId`) "
                  "VALUES (?, ?, ?)")
 _FSFILE_INSERT = ("INSERT INTO `fsrecords` (`Name`, `ParentId`, `DiskId`, "
@@ -74,15 +76,27 @@ class FileManagerDatabase(SQLite3connection):
         super().__init__(db_path)
         self._rehash_time = rehash_time
         # Details on current disk
-        self._disk_id: Optional[int] = None
+        self._disk_id: int = 0
         self._disk_uuid: Optional[str] = None
         self._disk_size: Optional[int] = None
         self._disk_label: Optional[str] = None
         # Ref to top dir on disk of the current dir
         self._top_dir_id: int = 0
-        self._dir_id_cache: Dict[str, int] = {}
+        self._id_cache: Dict[int, Dict[str, int]] = {}
+        self._path_cache: Dict[int, str] = {}
         self._cur_dir_id: int = 0
         self._cur_dir_path: Path = Path(".")
+
+    def _set_disk(self, id: int, uuid: str, size: int, label: str) -> None:
+        self._disk_id = id
+        self._disk_uuid = uuid
+        self._disk_size = size
+        self._disk_label = label
+
+    def _save_path_cache(self, path_id: int, path: str) -> None:
+        """Updates id and path caches."""
+        self._id_cache[self._disk_id][path] = path_id
+        self._path_cache[path_id] = path
 
     def handle_file_orfans(self, clear_orfan_files: bool = False) -> int:
         """Searching for orfans in files."""
@@ -118,12 +132,6 @@ class FileManagerDatabase(SQLite3connection):
                 tuple(orfans_list), commit=True)
         return orfans_count
 
-    def _set_disk(self, id: int, uuid: str, size: int, label: str) -> None:
-        self._disk_id = id
-        self._disk_uuid = uuid
-        self._disk_size = size
-        self._disk_label = label
-
     def set_disk(self, uuid: str, size: int, label: str) -> None:
         """Create/update disk details in DB."""
         for row in self._exec_query(DISK_SELECT, (uuid,), commit=False):
@@ -147,7 +155,7 @@ class FileManagerDatabase(SQLite3connection):
         for row in self._exec_query(
                 _TOP_DIR_SELECT, (self._disk_id,), commit=False):
             self._top_dir_id = row[0]
-            self._dir_id_cache = {'': self._top_dir_id}
+            self._id_cache[self._disk_id] = {'': self._top_dir_id}
             break
         else:
             self._exec_query(_FSDIR_INSERT, ("", None, self._disk_id))
@@ -178,9 +186,11 @@ class FileManagerDatabase(SQLite3connection):
         return self.get_fsrecord_id(fsrecord_name, parent_id, is_file=is_file)
 
     def get_dir_id(self, from_mount_path: List[str]) -> int:
+        """Returns id of the dir from a path."""
         if not from_mount_path:
             return self._top_dir_id
-        cached_id = self._dir_id_cache.get("/".join(from_mount_path))
+        cached_id = self._id_cache[self._disk_id].get(
+                "/".join(from_mount_path))
         if cached_id:
             return cached_id
 
@@ -189,13 +199,52 @@ class FileManagerDatabase(SQLite3connection):
         for dir_name in from_mount_path:
             cur_path_list.append(dir_name)
             cur_path = "/".join(cur_path_list)
-            if cur_path in self._dir_id_cache:
-                logging.debug(f"Found {cur_path} in _dir_id_cache")
-                cur_path_id = self._dir_id_cache[cur_path]
+            if cur_path in self._id_cache[self._disk_id]:
+                logging.debug(
+                        f"Found {cur_path} in _id_cache[{self._disk_id}]")
+                cur_path_id = self._id_cache[self._disk_id][cur_path]
             else:
                 cur_path_id = self.get_fsrecord_id(dir_name, cur_path_id)
-                self._dir_id_cache[cur_path] = cur_path_id
+                self._save_path_cache(cur_path_id, cur_path)
         return cur_path_id
+
+    def _update_caches(
+            self, name_list: List[str], id_list: List[int], parent_path: str
+    ) -> None:
+        """Updates name and id caches using lists from get_path()."""
+        if not name_list:
+            return
+        path_depth = len(name_list)
+        name_list.reverse()
+        id_list.reverse()
+        start_idx = 0 if name_list[0] else 1
+        for i in range(path_depth):
+            self._save_path_cache(
+                id_list[i],
+                get_full_path(name_list[i],
+                              (parent_path.split("/")
+                               if parent_path
+                               else []) + name_list[start_idx:i],
+                              id_list[i - 1] if i > 0 else None))
+
+    def get_path(self, fsrecord_id: int) -> str:
+        """Returns path of given fsrecord_id."""
+        name_list: List[str] = []
+        id_list: List[int] = []
+        current_id = fsrecord_id
+        while current_id:
+            cached_path = self._path_cache.get(current_id)
+            if cached_path:
+                self._update_caches(name_list, id_list, cached_path)
+                return cached_path
+            for row in self._exec_query(
+                    _DIR_PARENT_SELECT, (current_id,), commit=False):
+                logging.debug(row)
+                name_list.append(row[1])
+                id_list.append(current_id)
+                current_id = row[0]
+        self._update_caches(name_list, id_list, "")
+        return self._path_cache[fsrecord_id]
 
     def set_cur_dir(self, dir_path: Path):
         """Saving/updating dir with a path to disk root."""

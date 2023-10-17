@@ -64,8 +64,9 @@ class FileDuplicates(FileManagerDatabase):
             ) -> Dict[str, Tuple[List[int], List[int]]]:
         dir_a_files = []
         dir_b_files = []
-        logging.debug(f"comparing Dir pair {dir_a},{dir_b} for "
-                      f"max {max_diff} diff files")
+        logging.debug(
+            f"comparing Dir pair {self.get_path(dir_a)},{self.get_path(dir_b)}"
+            f" for max {max_diff} diff files")
         for row in self._exec_query(SELECT_DIR_FILES,
                                     (dir_a, dir_b),
                                     commit=False):
@@ -74,33 +75,43 @@ class FileDuplicates(FileManagerDatabase):
             else:
                 dir_b_files.append(row[1])
         if dir_a_files == dir_b_files:
-            logging.info(f"Dir {dir_a} is matching {dir_a} with 0 differences")
+            logging.info(f"Dir {self.get_path(dir_a)} is matching "
+                         f"{self.get_path(dir_b)} with 0 differences")
             return {f"{dir_a},{dir_b}": ([], [])}
 
         a_not_b = [a for a in dir_a_files if a not in dir_b_files]
         b_not_a = [b for b in dir_b_files if b not in dir_a_files]
         if not a_not_b:
-            logging.info(f"Dir {dir_a} contained in {dir_b}")
-            return {f"{dir_a},{dir_b}": (a_not_b, b_not_a)}
+            logging.info(f"Files of dir {dir_a} contained in {dir_b}")
+            return {
+                f"{self.get_path(dir_a)},{self.get_path(dir_b)}": (
+                    a_not_b, b_not_a
+                )
+            }
         if not b_not_a:
-            logging.info(f"Dir {dir_b} contained in {dir_a}")
+            logging.info(f"Files of {self.get_path(dir_b)} "
+                         f"contained in {self.get_path(dir_a)}")
             return {f"{dir_a},{dir_b}": (a_not_b, b_not_a)}
 
         diff_count = len(a_not_b) + len(b_not_a)
         if diff_count <= max_diff:
-            logging.info(f"Dir {dir_a} is matching {dir_b} with "
-                         f"{diff_count} differences")
+            logging.info(
+                f"Dir {self.get_path(dir_a)} is matching "
+                f"{self.get_path(dir_b)} with {diff_count} differences")
             return {f"{dir_a},{dir_b}": (a_not_b, b_not_a)}
         if len(a_not_b) <= max_diff:
-            logging.info(f"Dir {dir_a} contained in {dir_b} with "
+            logging.info(f"Files of {self.get_path(dir_a)} contained in "
+                         f"{self.get_path(dir_b)} with "
                          f"all but {len(a_not_b)} files")
             return {f"{dir_a},{dir_b}": (a_not_b, b_not_a)}
         if len(b_not_a) <= max_diff:
-            logging.info(f"Dir {dir_b} contained in {dir_a} with "
+            logging.info(f"Files of {self.get_path(dir_b)} contained in "
+                         f"{self.get_path(dir_a)} with "
                          f"all but {len(b_not_a)} files")
             return {f"{dir_a},{dir_b}": (a_not_b, b_not_a)}
-        logging.debug(f"Dir {dir_a} different from {dir_b} with "
-                      f"{diff_count} differences")
+        logging.debug(
+            f"Dir {self.get_path(dir_a)} different from {self.get_path(dir_b)}"
+            f" with {diff_count} differences")
         return {}
 
     def search_duplicate_folders(self, max_diff: int) -> None:
