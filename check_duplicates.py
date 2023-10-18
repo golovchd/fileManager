@@ -82,12 +82,9 @@ class FileDuplicates(FileManagerDatabase):
         a_not_b = [a for a in dir_a_files if a not in dir_b_files]
         b_not_a = [b for b in dir_b_files if b not in dir_a_files]
         if not a_not_b:
-            logging.info(f"Files of dir {dir_a} contained in {dir_b}")
-            return {
-                f"{self.get_path(dir_a)},{self.get_path(dir_b)}": (
-                    a_not_b, b_not_a
-                )
-            }
+            logging.info(f"Files of dir {self.get_path(dir_a)} contained "
+                         f"in {self.get_path(dir_b)}")
+            return {f"{dir_a},{dir_b}": (a_not_b, b_not_a)}
         if not b_not_a:
             logging.info(f"Files of {self.get_path(dir_b)} "
                          f"contained in {self.get_path(dir_a)}")

@@ -1,7 +1,7 @@
 import logging
 import sqlite3
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 TABLE_SELECT = "SELECT `ROWID`, `{}`.* FROM `{}` ORDER BY `ROWID`"
 # Tables and indexes to ignore
@@ -45,20 +45,6 @@ def compare_db_with_ignores(db1_path: Path, dg2_path: Path) -> None:
                     assert rows_1[i] == rows_2[i]
     connection_1.close()
     connection_2.close()
-
-
-def get_full_path(
-        name: str, parent_path: List[str], parent_id: Optional[int]) -> str:
-    """Constructs valid parent path from name, path and id."""
-    if parent_id is None:
-        return ""
-    if not parent_path:
-        return name
-    if not name:
-        raise ValueError(
-            f"Unexpected empty name for parent_id={parent_id} "
-            f"and parent path {parent_path}")
-    return "/".join(parent_path + [name])
 
 
 class SQLite3connection:

@@ -6,7 +6,7 @@ from time import time
 from typing import Dict, List, Optional, Tuple
 
 import file_utils
-from db_utils import SQLite3connection, get_full_path
+from db_utils import SQLite3connection
 from utils import timestamp2exif_str
 
 DISK_SELECT = ("SELECT `ROWID`, `UUID`, `DiskSize`, `Label`"
@@ -92,6 +92,8 @@ class FileManagerDatabase(SQLite3connection):
         self._disk_uuid = uuid
         self._disk_size = size
         self._disk_label = label
+        if self._disk_id not in self._id_cache:
+            self._id_cache[self._disk_id] = {}
 
     def _save_path_cache(self, path_id: int, path: str) -> None:
         """Updates id and path caches."""
@@ -208,43 +210,28 @@ class FileManagerDatabase(SQLite3connection):
                 self._save_path_cache(cur_path_id, cur_path)
         return cur_path_id
 
-    def _update_caches(
-            self, name_list: List[str], id_list: List[int], parent_path: str
-    ) -> None:
-        """Updates name and id caches using lists from get_path()."""
-        if not name_list:
-            return
-        path_depth = len(name_list)
-        name_list.reverse()
-        id_list.reverse()
-        start_idx = 0 if name_list[0] else 1
-        for i in range(path_depth):
-            self._save_path_cache(
-                id_list[i],
-                get_full_path(name_list[i],
-                              (parent_path.split("/")
-                               if parent_path
-                               else []) + name_list[start_idx:i],
-                              id_list[i - 1] if i > 0 else None))
-
     def get_path(self, fsrecord_id: int) -> str:
         """Returns path of given fsrecord_id."""
-        name_list: List[str] = []
-        id_list: List[int] = []
-        current_id = fsrecord_id
-        while current_id:
-            cached_path = self._path_cache.get(current_id)
-            if cached_path:
-                self._update_caches(name_list, id_list, cached_path)
-                return cached_path
-            for row in self._exec_query(
-                    _DIR_PARENT_SELECT, (current_id,), commit=False):
-                logging.debug(row)
-                name_list.append(row[1])
-                id_list.append(current_id)
-                current_id = row[0]
-        self._update_caches(name_list, id_list, "")
-        return self._path_cache[fsrecord_id]
+        cached_path = self._path_cache.get(fsrecord_id)
+        if cached_path:
+            return cached_path
+        for row in self._exec_query(
+                _DIR_PARENT_SELECT, (fsrecord_id,), commit=False):
+            if row[0] == fsrecord_id:
+                raise ValueError(f"Parent query returned parent {row[0]} for "
+                                 f"{fsrecord_id}")
+            if row[0] is None or not row[1]:
+                fsrecord_path = ""
+                break
+            parent_path = self.get_path(row[0])
+            if parent_path:
+                fsrecord_path = f"{parent_path}/{row[1]}"
+            else:
+                fsrecord_path = row[1]
+            break
+
+        self._save_path_cache(fsrecord_id, fsrecord_path)
+        return fsrecord_path
 
     def set_cur_dir(self, dir_path: Path):
         """Saving/updating dir with a path to disk root."""
