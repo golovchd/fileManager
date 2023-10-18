@@ -25,7 +25,10 @@ DUPLICATES_FOLDERS = ("SELECT * FROM "
                       "GROUP BY `FileId`) "
                       "WHERE `FileCount` > 1 "
                       "ORDER BY `Parents` ASC, `FileCount`")
-SELECT_DIR_FILES = ("SELECT `ROWID`, `FileId`, `ParentId` FROM `fsrecords` "
+SELECT_DIR_FILES = ("SELECT `fsrecords`.`ROWID`, `FileId`, `ParentId`, "
+                    "`FileSize` "
+                    "FROM `fsrecords` "
+                    "INNER JOIN `files` ON `files`.`ROWID` = `FileId`"
                     "WHERE `ParentId` IN (?, ?) "
                     "ORDER BY `ParentId`, `FileId`")
 
