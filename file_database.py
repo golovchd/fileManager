@@ -9,8 +9,11 @@ import file_utils
 from db_utils import SQLite3connection
 from utils import timestamp2exif_str
 
-DISK_SELECT = ("SELECT `ROWID`, `UUID`, `DiskSize`, `Label`"
-               " FROM `disks` WHERE UUID = ?")
+DEFAULT_DATABASE = Path("/var/lib/file-manager/fileManager.db")
+
+
+_DISK_SELECT = ("SELECT `ROWID`, `UUID`, `DiskSize`, `Label`"
+                " FROM `disks` WHERE `UUID` = ? OR `Label` = ?")
 _DISK_UPDATE_SIZE = ("UPDATE `disks` SET `DiskSize` = ?, `Label` = ?"
                      " WHERE `ROWID` = ?")
 _DISK_INSERT = ("INSERT INTO `disks` (`UUID`, `DiskSize`, `Label`) "
@@ -95,6 +98,10 @@ class FileManagerDatabase(SQLite3connection):
         if self._disk_id not in self._id_cache:
             self._id_cache[self._disk_id] = {}
 
+    @property
+    def disk_name(self) -> str:
+        return self._disk_label or self._disk_uuid or ""
+
     def _save_path_cache(self, path_id: int, path: str) -> None:
         """Updates id and path caches."""
         self._id_cache[self._disk_id][path] = path_id
@@ -136,7 +143,7 @@ class FileManagerDatabase(SQLite3connection):
 
     def set_disk(self, uuid: str, size: int, label: str) -> None:
         """Create/update disk details in DB."""
-        for row in self._exec_query(DISK_SELECT, (uuid,), commit=False):
+        for row in self._exec_query(_DISK_SELECT, (uuid, uuid), commit=False):
             self._set_disk(row[0], row[1], size, label)
             # TODO: support free disk space tracking in DB
             if row[2] != size or row[3] != label:
@@ -149,6 +156,19 @@ class FileManagerDatabase(SQLite3connection):
         else:
             self._exec_query(_DISK_INSERT, (uuid, size, label))
             self.set_disk(uuid, size, label)
+
+    def set_disk_by_name(self, name: str) -> None:
+        for row in self._exec_query(_DISK_SELECT, (name, name), commit=False):
+            self._set_disk(row[0], row[1], row[2], row[3])
+            self.set_top_dir()
+            break
+        else:
+            raise ValueError(
+                f"DB does not have info on disk with UUID={name} "
+                f"or label={name}")
+        logging.info(
+            f"Processing disk id={self._disk_id}, size={self._disk_size}, "
+            f"label={self._disk_label}, UUID={self._disk_uuid}")
 
     def set_top_dir(self):
         """Loading from DB or creating if missing top dir id."""
@@ -168,7 +188,9 @@ class FileManagerDatabase(SQLite3connection):
         del file_type
         return None
 
-    def get_fsrecord_id(self, fsrecord_name, parent_id, is_file=False):
+    def get_fsrecord_id(
+                self, fsrecord_name, parent_id, is_file=False, insert_dirs=True
+                ):
         """Getting dir id for given name/parent, generating if missing."""
         if not self._disk_id:
             raise ValueError("Missing _disk_id")
@@ -182,6 +204,9 @@ class FileManagerDatabase(SQLite3connection):
 
         if is_file:
             raise ValueError("Missing fsrecord_id for a file")
+        if not insert_dirs:
+            raise ValueError(f"Missing fsrecord_id for a dir {fsrecord_name} "
+                             f"under {parent_id}")
 
         self._exec_query(
             _FSDIR_INSERT, (fsrecord_name, parent_id, self._disk_id))
@@ -206,7 +231,8 @@ class FileManagerDatabase(SQLite3connection):
                         f"Found {cur_path} in _id_cache[{self._disk_id}]")
                 cur_path_id = self._id_cache[self._disk_id][cur_path]
             else:
-                cur_path_id = self.get_fsrecord_id(dir_name, cur_path_id)
+                cur_path_id = self.get_fsrecord_id(
+                    dir_name, cur_path_id, insert_dirs=False)
                 self._save_path_cache(cur_path_id, cur_path)
         return cur_path_id
 

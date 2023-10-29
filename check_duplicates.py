@@ -7,9 +7,7 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from file_database import DISK_SELECT, FileManagerDatabase
-
-DEFAULT_DATABASE = Path("/var/lib/file-manager/fileManager.db")
+from file_database import DEFAULT_DATABASE, FileManagerDatabase
 
 DEFAULT_MIN_SIZE = 1000000  # 1 MB
 
@@ -40,27 +38,6 @@ class FileDuplicates(FileManagerDatabase):
             self, db_path: Path, min_size: int):
         super().__init__(db_path, 0)
         self._min_size = min_size
-
-    def set_disk(self, uuid: str, size: int, label: str) -> None:
-        del size
-        if uuid:
-            for row in self._exec_query(DISK_SELECT, (uuid,), commit=False):
-                self._set_disk(row[0], row[1], row[2], row[3])
-                break
-            else:
-                raise ValueError(
-                    f"DB does not have info on disk with UUID={uuid}")
-        else:
-            for row in self._exec_query(
-                    DISK_SELECT_LABEL, (label,), commit=False):
-                self._set_disk(row[0], row[1], row[2], row[3])
-                break
-            else:
-                raise ValueError(
-                    f"DB does not have info on disk with label={label}")
-        logging.info(
-            f"Processing disk id={self._disk_id}, size={self._disk_size}, "
-            f"label={self._disk_label}, UUID={self._disk_uuid}")
 
     def compare_dirs(
             self, dir_a: int, dir_b: int, max_diff: int
@@ -209,7 +186,7 @@ def main(argv):
         level=logging.WARNING - 10 * (args.verbose if args.verbose < 3 else 2))
 
     with FileDuplicates(args.database, args.min_size) as file_db:
-        file_db.set_disk(args.uuid, 0, args.label)
+        file_db.set_disk_by_name(args.uuid or args.label)
         file_db.search_duplicate_folders(args.max_diff)
 
 
