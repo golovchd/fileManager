@@ -35,7 +35,8 @@ class FileUtils(FileManagerDatabase):
 
     def list_dir(self, disk: str, dir_path: str) -> None:
         self.set_disk_by_name(disk)
-        self._cur_dir_id = self.get_dir_id(dir_path.split("/"))
+        self._cur_dir_id = self.get_dir_id(
+            dir_path.split("/"), insert_dirs=False)
         logging.debug(
             f"Listing dir {self.disk_name}/{dir_path} id={self._cur_dir_id}")
 

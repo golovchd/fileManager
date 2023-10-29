@@ -212,7 +212,8 @@ class FileManagerDatabase(SQLite3connection):
             _FSDIR_INSERT, (fsrecord_name, parent_id, self._disk_id))
         return self.get_fsrecord_id(fsrecord_name, parent_id, is_file=is_file)
 
-    def get_dir_id(self, from_mount_path: List[str]) -> int:
+    def get_dir_id(
+            self, from_mount_path: List[str], insert_dirs: bool = True) -> int:
         """Returns id of the dir from a path."""
         if not from_mount_path:
             return self._top_dir_id
@@ -232,7 +233,7 @@ class FileManagerDatabase(SQLite3connection):
                 cur_path_id = self._id_cache[self._disk_id][cur_path]
             else:
                 cur_path_id = self.get_fsrecord_id(
-                    dir_name, cur_path_id, insert_dirs=False)
+                    dir_name, cur_path_id, insert_dirs=insert_dirs)
                 self._save_path_cache(cur_path_id, cur_path)
         return cur_path_id
 
