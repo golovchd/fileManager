@@ -7,10 +7,10 @@ import sys
 import time
 from pathlib import Path
 
+from file_database import DEFAULT_DATABASE
 from file_database_update import FileDatabaseUpdater
 
 REHASH_INTERVAL = 180  # Number of days before re-hash file if not changed
-DEFAULT_DATABASE_NAME = "fileManager.db"
 
 
 def main(argv):
@@ -36,7 +36,7 @@ def main(argv):
         type=Path,
         help="Database file",
         required=False,
-        default=DEFAULT_DATABASE_NAME)
+        default=DEFAULT_DATABASE)
     arg_parser.add_argument("-v", "--verbose",
                             help="Print verbose output",
                             action="count", default=0)
