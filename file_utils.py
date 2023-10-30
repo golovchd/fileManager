@@ -83,6 +83,9 @@ def generate_file_sha1(
     except PermissionError:
         logging.exception(f"generate_file_sha1 failed to read {file_path}")
         return "", 0
+    except OSError:
+        logging.exception(f"generate_file_sha1 failed to read {file_path}")
+        return "", 0
     file_size = file_path.stat().st_size
     duration = clock_gettime_ns(CLOCK_MONOTONIC) - start_time
     mb_per_second = (file_size * 1E3) / duration
