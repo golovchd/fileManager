@@ -3,10 +3,19 @@
 import argparse
 import logging
 from pathlib import Path
+from typing import Callable, List
 
 from file_database import DEFAULT_DATABASE, FileManagerDatabase
+from utils import print_table, timestamp2exif_str
 
 _DISKS_SELECT = "SELECT `ROWID`, `UUID`, `Label`, `DiskSize` FROM `disks`"
+
+_DIR_LIST_SELECT = ("SELECT `fsrecords`.`ROWID`, `fsrecords`.`Name`, "
+                    "`fsrecords`.`FileDate`, `fsrecords`.`SHA1ReadDate`, "
+                    "`files`.`ROWID`, `files`.`FileSize`, `SHA1`"
+                    " FROM `fsrecords` LEFT JOIN `files`"
+                    " ON `files`.`ROWID` = `fsrecords`.`FileId`"
+                    " WHERE `ParentId` = ? ORDER BY `FileId`, `Name`")
 
 
 class FileUtils(FileManagerDatabase):
@@ -18,20 +27,12 @@ class FileUtils(FileManagerDatabase):
 
     def list_disks(self, filter: str) -> None:
         disks = []
-        headers = ["DiskID", "UUID", "Label", "DiskSize"]
-        column_sizes = [len(header) for header in headers]
         for row in self._exec_query(_DISKS_SELECT, (), commit=False):
             if filter and filter not in row[1:3]:
                 continue
             disks.append(row)
-            for i in range(len(row)):
-                column_sizes[i] = max(column_sizes[i], len(str(row[i])))
-        format_str = "|"
-        for column_size in column_sizes:
-            format_str += f" {{:>{column_size}}} |"
-        print(format_str.format(*headers))
-        for disk in disks:
-            print(format_str.format(*disk))
+        headers = ["DiskID", "UUID", "Label", "DiskSize"]
+        print_table(disks, headers)
 
     def list_dir(self, disk: str, dir_path: str) -> None:
         self.set_disk_by_name(disk)
@@ -39,6 +40,23 @@ class FileUtils(FileManagerDatabase):
             dir_path.split("/"), insert_dirs=False)
         logging.debug(
             f"Listing dir {self.disk_name}/{dir_path} id={self._cur_dir_id}")
+        dir_content = []
+        for row in self._exec_query(
+                _DIR_LIST_SELECT, (self._cur_dir_id,), commit=False):
+            dir_content.append(row)
+        headers = ["Name", "Size", "File Date", "Hash Date, SHA256"]
+        indexes = [1, 5, 2, 3, 6]
+        formats: List[Callable] = [
+            str,
+            lambda x: str(x) if x else "dir",
+            timestamp2exif_str,
+            timestamp2exif_str,
+            str
+        ]
+        aligns = ["<", ">", ">", ">", "<"]
+        print_table(
+            dir_content, headers, indexes=indexes,
+            formats=formats, aligns=aligns)
 
 
 def list_disks_command(file_db: FileUtils, args: argparse.Namespace) -> int:
