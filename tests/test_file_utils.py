@@ -10,8 +10,8 @@ TEST_DATA_DIR = SCRIPT_DIR.parent / "test_data"
 sys.path.append(str(SCRIPT_DIR.parent))
 
 from file_utils import (generate_file_sha1, get_full_dir_path,  # noqa: E402
-                        get_mount_path, get_path_from_mount, read_dir,
-                        read_file)
+                        get_mount_path, get_path_disk_info,
+                        get_path_from_mount, read_dir, read_file)
 
 
 def test_get_full_dir_path():
@@ -166,3 +166,90 @@ def test_read_file(
     assert read_file_type == file_type
     assert read_size == size
     assert read_sha1 == ''
+
+
+@pytest.mark.parametrize(
+    "dir_path, df_info, lsbls_info, uuid, label, size",
+    [
+        (
+            "/media/user/My Backup 8/data",
+            b"\n".join([
+                b"Filesystem      1K-blocks",
+                b"/dev/sde1      1953513556",
+                b""
+            ]),
+            b"\n".join([
+                b"UUID                                 LABEL",
+                b"F2FC151BAC04DF13                     My Backup 8",
+                b""
+            ]),
+            "F2FC151BAC04DF13",
+            "My Backup 8",
+            1953513556,
+        ),
+        (
+            "/media/user/My Backup 8/data",
+            b"\n".join([
+                b"Filesystem      1K-blocks",
+                b"/dev/sde1      1953513556",
+                b""
+            ]),
+            b"\n".join([
+                b"UUID                                 LABEL",
+                b"                                     My Backup 8",
+                b""
+            ]),
+            "",
+            "My Backup 8",
+            1953513556,
+        ),
+        (
+            "/media/user/My Backup 8/data",
+            b"\n".join([
+                b"Filesystem      1K-blocks",
+                b"/dev/sde1      1953513556",
+                b""
+            ]),
+            b"\n".join([
+                b"UUID                                 LABEL",
+                b"F2FC151BAC04DF13                     My Backup 8",
+                b""
+            ]),
+            "F2FC151BAC04DF13",
+            "My Backup 8",
+            1953513556,
+        ),
+        (
+            "/media/user/DISK_LABEL/data",
+            b"\n".join([
+                b"Filesystem      1K-blocks",
+                b"/dev/sde1      1953513556",
+                b""
+            ]),
+            b"\n".join([
+                b"UUID                                 LABEL",
+                b"F2FC151BAC04DF13                     DISK_LABEL",
+                b""
+            ]),
+            "F2FC151BAC04DF13",
+            "DISK_LABEL",
+            1953513556,
+        ),
+    ],
+)
+def test_get_path_disk_info(
+        mocker,
+        dir_path: str,
+        df_info: bytes,
+        lsbls_info: bytes,
+        uuid: str,
+        label: str,
+        size: int
+        ) -> None:
+
+    mocker.patch("subprocess.check_output",
+                 lambda cmd: df_info if cmd[0] == "df" else lsbls_info)
+    disk_info = get_path_disk_info(dir_path)
+    assert disk_info["uuid"] == uuid
+    assert disk_info["label"] == label
+    assert disk_info["size"] == size

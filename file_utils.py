@@ -46,10 +46,15 @@ def get_path_disk_info(dir_path):
     device_info = subprocess.check_output(uuid_cmd).decode(
         sys.stdin.encoding).split("\n")[-2].split(" ")
     logging.debug(device_info)
+    label = ""
+    for i in range(1, len(device_info)):
+        if device_info[i]:
+            label = " ".join(device_info[i:])
+            break
     return {
         "uuid": device_info[0],
         "size": int(device_path[-1]),
-        "label": device_info[-1] if len(device_info) > 1 else "",
+        "label": label,
     }
 
 
