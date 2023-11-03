@@ -14,8 +14,6 @@ DEFAULT_DATABASE = Path("/var/lib/file-manager/fileManager.db")
 
 _DISK_SELECT = ("SELECT `ROWID`, `UUID`, `DiskSize`, `Label`"
                 " FROM `disks` WHERE `UUID` = ? OR `Label` = ?")
-_DISK_UPDATE_SIZE = ("UPDATE `disks` SET `DiskSize` = ?, `Label` = ?"
-                     " WHERE `ROWID` = ?")
 _DISK_INSERT = ("INSERT INTO `disks` (`UUID`, `DiskSize`, `Label`) "
                 "VALUES (?, ?, ?)")
 

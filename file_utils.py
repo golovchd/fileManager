@@ -1,12 +1,13 @@
 """File utils module."""
 
 import hashlib
+import json
 import logging
 import subprocess
 import sys
 from pathlib import Path
 from time import CLOCK_MONOTONIC, clock_gettime_ns
-from typing import List, Tuple
+from typing import Any, Dict, List, Tuple
 
 _IGNORED_DIRS = [".", "..", "$RECYCLE.BIN"]
 
@@ -37,25 +38,33 @@ def get_path_from_mount(dir_path: Path) -> List[str]:
     return str(relative_from_mount).split("/")
 
 
-def get_path_disk_info(dir_path):
+def get_disk_info(uuid: str) -> Dict[str, Any]:
+    for device_info in get_lsblk():
+        if device_info["uuid"] == uuid:
+            return device_info
+    raise ValueError(f"Failed to locate device for UUID {uuid}")
+
+
+def get_lsblk() -> List[Dict[str, str]]:
+    uuid_cmd = ["lsblk", "-a", "--output=UUID,LABEL,FSSIZE,MOUNTPOINT",
+                "--json", "--bytes"]
+    lsblk_info = json.loads(subprocess.check_output(uuid_cmd).decode(
+                             sys.stdin.encoding))
+    logging.debug(lsblk_info)
+    return lsblk_info["blockdevices"]
+
+
+def get_path_disk_info(dir_path: Path) -> Dict[str, Any]:
     """Getting disk info for given path."""
-    df_device_cmd = ['df', dir_path, '--output=source,size']
-    device_path = subprocess.check_output(df_device_cmd).decode(
-        sys.stdin.encoding).split("\n")[-2].split(" ")
-    uuid_cmd = ["lsblk", device_path[0], "--output=UUID,LABEL"]
-    device_info = subprocess.check_output(uuid_cmd).decode(
-        sys.stdin.encoding).split("\n")[-2].split(" ")
-    logging.debug(device_info)
-    label = ""
-    for i in range(1, len(device_info)):
-        if device_info[i]:
-            label = " ".join(device_info[i:])
-            break
-    return {
-        "uuid": device_info[0],
-        "size": int(device_path[-1]),
-        "label": label,
-    }
+    mount_path = str(get_mount_path(dir_path))
+    for device_info in get_lsblk():
+        if device_info["mountpoint"] == mount_path:
+            return {
+                "uuid": device_info["uuid"],
+                "size": int(device_info["fssize"]) // 1024,
+                "label": device_info["label"] or "",
+            }
+    raise ValueError(f"Failed to locate device for path {dir_path}")
 
 
 def read_dir(dir_path: Path) -> Tuple[List[str], List[str]]:

@@ -169,87 +169,81 @@ def test_read_file(
 
 
 @pytest.mark.parametrize(
-    "dir_path, df_info, lsbls_info, uuid, label, size",
+    "dir_path, lsblk_info, uuid, label, size",
     [
         (
-            "/media/user/My Backup 8/data",
+            Path("/media/user/My Backup 8/data"),
             b"\n".join([
-                b"Filesystem      1K-blocks",
-                b"/dev/sde1      1953513556",
-                b""
-            ]),
-            b"\n".join([
-                b"UUID                                 LABEL",
-                b"F2FC151BAC04DF13                     My Backup 8",
-                b""
+                b'{',
+                b'   "blockdevices": [',
+                b'      {',
+                b'         "uuid": "F2FC151BAC04DF13",',
+                b'         "label": "My Backup 8",',
+                b'         "fssize": "6001039241216",',
+                b'         "mountpoint": "/media/user/My Backup 8"',
+                b'      }',
+                b'   ]',
+                b'}',
+                b''
             ]),
             "F2FC151BAC04DF13",
             "My Backup 8",
-            1953513556,
+            5860389884,
         ),
         (
-            "/media/user/My Backup 8/data",
+            Path("/media/user/My Backup 8/data"),
             b"\n".join([
-                b"Filesystem      1K-blocks",
-                b"/dev/sde1      1953513556",
-                b""
-            ]),
-            b"\n".join([
-                b"UUID                                 LABEL",
-                b"                                     My Backup 8",
-                b""
+                b'{',
+                b'   "blockdevices": [',
+                b'      {',
+                b'         "uuid": "",',
+                b'         "label": "My Backup 8",',
+                b'         "fssize": "2000397881344",',
+                b'         "mountpoint": "/media/user/My Backup 8"',
+                b'      }',
+                b'   ]',
+                b'}',
+                b''
             ]),
             "",
             "My Backup 8",
             1953513556,
         ),
         (
-            "/media/user/My Backup 8/data",
+            Path("/media/user/DISK_LABEL/data"),
             b"\n".join([
-                b"Filesystem      1K-blocks",
-                b"/dev/sde1      1953513556",
-                b""
-            ]),
-            b"\n".join([
-                b"UUID                                 LABEL",
-                b"F2FC151BAC04DF13                     My Backup 8",
-                b""
-            ]),
-            "F2FC151BAC04DF13",
-            "My Backup 8",
-            1953513556,
-        ),
-        (
-            "/media/user/DISK_LABEL/data",
-            b"\n".join([
-                b"Filesystem      1K-blocks",
-                b"/dev/sde1      1953513556",
-                b""
-            ]),
-            b"\n".join([
-                b"UUID                                 LABEL",
-                b"F2FC151BAC04DF13                     DISK_LABEL",
-                b""
+                b'{',
+                b'   "blockdevices": [',
+                b'      {',
+                b'         "uuid": "F2FC151BAC04DF13",',
+                b'         "label": "DISK_LABEL",',
+                b'         "fssize": "2000333307904",',
+                b'         "mountpoint": "/media/user/DISK_LABEL"',
+                b'      }',
+                b'   ]',
+                b'}',
+                b''
             ]),
             "F2FC151BAC04DF13",
             "DISK_LABEL",
-            1953513556,
+            1953450496,
         ),
     ],
 )
 def test_get_path_disk_info(
         mocker,
-        dir_path: str,
-        df_info: bytes,
-        lsbls_info: bytes,
+        dir_path: Path,
+        lsblk_info: bytes,
         uuid: str,
         label: str,
         size: int
         ) -> None:
 
-    mocker.patch("subprocess.check_output",
-                 lambda cmd: df_info if cmd[0] == "df" else lsbls_info)
+    mocker.patch("subprocess.check_output", lambda _: lsblk_info)
+    mocker.patch("file_utils.get_mount_path",
+                 lambda p: Path("/".join(str(p).split("/")[:4])))
     disk_info = get_path_disk_info(dir_path)
     assert disk_info["uuid"] == uuid
     assert disk_info["label"] == label
     assert disk_info["size"] == size
+    assert len(disk_info.keys()) == 3
