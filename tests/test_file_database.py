@@ -31,11 +31,25 @@ def test_set_disk_change(tmp_path: Path, mocker) -> None:
         "file_database.FileManagerDatabase._exec_query", mock_exec_query)
 
     with FileManagerDatabase(tmp_path / _TEST_DB_NAME, time.time()) as db:
-        db.set_disk("abc", 400, "new-label")
+        db.set_disk("abc", 500, "test-label")
         assert db._disk_id == 5
         assert db._disk_uuid == "abc"
-        assert db._disk_size == 400
-        assert db._disk_label == "new-label"
+        assert db._disk_size == 500
+        assert db._disk_label == "test-label"
+
+    with pytest.raises(ValueError) as error_info:
+        with FileManagerDatabase(tmp_path / _TEST_DB_NAME, time.time()) as db:
+            db.set_disk("abc", 400, "test-label")
+        assert (
+            error_info ==
+            "Disk UUID abc details changed: 500->400, test-label->test-label")
+
+    with pytest.raises(ValueError) as error_info:
+        with FileManagerDatabase(tmp_path / _TEST_DB_NAME, time.time()) as db:
+            db.set_disk("abc", 500, "new-label")
+        assert (
+            error_info ==
+            "Disk UUID abc details changed: 500->500, test-label->new-label")
 
 
 @pytest.mark.parametrize(

@@ -147,10 +147,11 @@ class FileManagerDatabase(SQLite3connection):
             self._set_disk(row[0], row[1], size, label)
             # TODO: support free disk space tracking in DB
             if row[2] != size or row[3] != label:
-                logging.warning("Size or label of disk UUID %s changed: "
-                                "%d -> %d, %s -> %s",
-                                uuid, row[2], size, row[3], label)
-                self._exec_query(_DISK_UPDATE_SIZE, (size, label, uuid))
+                logging.error("Size or label of disk UUID %s changed: "
+                              "%d -> %d, %s -> %s",
+                              uuid, row[2], size, row[3], label)
+                raise ValueError(f"Disk UUID {uuid} details changed: "
+                                 f"{row[2]}->{size}, {row[3]}->{label}")
             self.set_top_dir()
             break
         else:
