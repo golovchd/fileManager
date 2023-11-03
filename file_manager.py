@@ -6,10 +6,12 @@ from pathlib import Path
 from typing import Callable, List
 
 from file_database import DEFAULT_DATABASE, FileManagerDatabase
+from file_utils import get_disk_info
 from utils import print_table, timestamp2exif_str
 
 _DISKS_SELECT = "SELECT `ROWID`, `UUID`, `Label`, `DiskSize` FROM `disks`"
-
+_DISK_UPDATE_SIZE = ("UPDATE `disks` SET `DiskSize` = ?, `Label` = ?"
+                     " WHERE `ROWID` = ?")
 _DIR_LIST_SELECT = ("SELECT `fsrecords`.`ROWID`, `fsrecords`.`Name`, "
                     "`fsrecords`.`FileDate`, `fsrecords`.`SHA1ReadDate`, "
                     "`files`.`ROWID`, `files`.`FileSize`, `SHA1`"
@@ -25,14 +27,29 @@ class FileUtils(FileManagerDatabase):
             self, db_path: Path):
         super().__init__(db_path, 0)
 
-    def list_disks(self, filter: str) -> None:
+    def query_disks(self, filter: str) -> List[List[str]]:
         disks = []
         for row in self._exec_query(_DISKS_SELECT, (), commit=False):
             if filter and filter not in row[1:3]:
                 continue
             disks.append(row)
+        return disks
+
+    def list_disks(self, filter: str) -> None:
         headers = ["DiskID", "UUID", "Label", "DiskSize"]
-        print_table(disks, headers)
+        print_table(self.query_disks(filter), headers)
+
+    def update_disk(self, filter: str) -> None:
+        disks = self.query_disks(filter)
+        if len(disks) > 1:
+            raise ValueError(f"More then one disk is matching UUID {filter}")
+        disk_info = get_disk_info(disks[0][1])
+        self._exec_query(
+            _DISK_UPDATE_SIZE,
+            (int(disk_info["fssize"]) // 1024,
+             disk_info["label"],
+             disks[0][0]),
+            commit=True)
 
     def list_dir(self, disk: str, dir_path: str) -> None:
         self.set_disk_by_name(disk)
@@ -71,6 +88,11 @@ def list_dir_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     return 0
 
 
+def update_disk_command(file_db: FileUtils, args: argparse.Namespace) -> int:
+    file_db.update_disk(args.disk)
+    return 0
+
+
 def parse_arguments() -> argparse.Namespace:
     """CLI arguments parser."""
     arg_parser = argparse.ArgumentParser(
@@ -87,26 +109,33 @@ def parse_arguments() -> argparse.Namespace:
         default=DEFAULT_DATABASE)
     arg_parser.add_argument(
         "-d", "--disk", type=str,
-        help="Disk label or UUID to process, requirted for list-dir")
+        help=("Disk label or UUID to process, requirted for list-dir, "
+              "update-disk"))
     subparsers = arg_parser.add_subparsers(
         help="Commands supported by CLI tool", dest="command")
 
     list_disks = subparsers.add_parser(
         "list-disks", help="List disks with statistic")
-    list_disks.set_defaults(func=list_disks_command)
+    list_disks.set_defaults(func=list_disks_command, cmd_name="list-disks")
     list_disks.add_argument(
         "-s", "--size", help="Calculate used space", action="store_true")
 
     list_dir = subparsers.add_parser(
         "list-dir", help="List directory with statistic")
-    list_dir.set_defaults(func=list_dir_command)
+    list_dir.set_defaults(func=list_dir_command, cmd_name="list-dir")
     list_dir.add_argument("dir_path", type=str, help="Path to dir to list")
     list_disks.add_argument(
         "-r", "--recursive", help="List dir recursively", action="store_true")
 
+    update_disk = subparsers.add_parser(
+        "update-disk", help="Update disk with given UUID")
+    update_disk.set_defaults(func=update_disk_command, cmd_name="update-disk")
+
     args = arg_parser.parse_args()
-    if hasattr(args, "dir_path") and not args.disk:
+    if args.cmd_name == "list-dir" and not args.disk:
         arg_parser.error("-d DISK argument is required for list-dir")
+    if args.cmd_name == "update-disk" and not args.disk:
+        arg_parser.error("-d DISK argument is required for update-disk")
     return args
 
 
