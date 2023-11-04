@@ -126,7 +126,7 @@ class FileDatabaseUpdater(FileManagerDatabase):
         """Removes fsrecords and file orfans."""
         for i in range(_MAX_ORFAN_SEARCH_DEPTH):
             count = self.remove_fsrecords_orfans()
-            logging.info(f"handle_orfans: Round {i} removed "
+            logging.info(f"handle_orfans: Found {i} removed "
                          f"{count} orfans from fsrecords")
             if not count:
                 break
