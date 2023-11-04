@@ -32,7 +32,6 @@ def get_mount_path(dir_path: Path) -> Path:
 def get_path_from_mount(dir_path: Path) -> List[str]:
     """Returning list dir from mount point to current."""
     relative_from_mount = dir_path.relative_to(get_mount_path(dir_path))
-    print(dir_path, get_mount_path(dir_path), relative_from_mount)
     if relative_from_mount == Path("."):
         return [""]
     return str(relative_from_mount).split("/")
