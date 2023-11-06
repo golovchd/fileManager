@@ -1,6 +1,7 @@
 import logging
 import sqlite3
 from pathlib import Path
+from time import sleep
 from typing import Dict, List, Tuple
 
 TABLE_SELECT = "SELECT `ROWID`, `{}`.* FROM `{}` ORDER BY `ROWID`"
@@ -11,6 +12,10 @@ TABLE_COMPARE: Dict[str, List[int]] = {
     "disks": [1, 2],
     "fsrecords": [4, 6],
 }
+
+_RETRY_COUNT = 3
+_RETRY_FIRST_DELAY = 1
+_RETRY_DELAY_EXP = 1.5
 
 
 def create_db(db_path: Path, db_dump: Path) -> None:
@@ -66,12 +71,22 @@ class SQLite3connection:
 
     def _exec_query(self, sql: str, params: Tuple, commit=True):
         """SQL quesy executor with logging."""
-        try:
-            result = self._con.execute(sql, params)
-            if commit:
-                self._con.commit()
-            logging.debug("SQL succeed: %s with %r", sql, params)
-            return result
-        except sqlite3.OperationalError as e:
-            logging.exception("SQL failed: %s with %r", sql, params)
-            raise e
+        delay: float = _RETRY_FIRST_DELAY
+        for retry in range(_RETRY_COUNT):
+            try:
+                result = self._con.execute(sql, params)
+                if commit:
+                    self._con.commit()
+                logging.debug("SQL succeed: %s with %r", sql, params)
+                return result
+            except sqlite3.OperationalError as e:
+                if (str(e) == "database is locked"):
+                    logging.debug(
+                        "SQL failed as %s, retry %d after %ds: %s with %r",
+                        e, retry, delay, sql, params)
+                    sleep(delay)
+                    delay *= _RETRY_DELAY_EXP
+                    continue
+                logging.exception(
+                    "SQL failed as %s: %s with %r", e, sql, params)
+                raise e
