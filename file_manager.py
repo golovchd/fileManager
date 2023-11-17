@@ -9,7 +9,13 @@ from file_database import DEFAULT_DATABASE, FileManagerDatabase
 from file_utils import get_disk_info
 from utils import print_table, timestamp2exif_str
 
-_DISKS_SELECT = "SELECT `ROWID`, `UUID`, `Label`, `DiskSize` FROM `disks`"
+_DISKS_SELECT = "SELECT `ROWID`, `UUID`, `Label`, `DiskSize`/1024 FROM `disks`"
+_DISK_SELECT_SIZE = ("SELECT `disks`.`ROWID`, `UUID`, `Label`, "
+                     "`DiskSize`/1024, SUM(`FileSize`)/1048576 FROM `disks`"
+                     "INNER JOIN `fsrecords` ON `DiskId` = `disks`.`ROWID` "
+                     "INNER JOIN `files` ON `files`.`ROWID` = `FileId` "
+                     "GROUP BY `disks`.`ROWID` "
+                     "ORDER BY `disks`.`ROWID`")
 _DISK_UPDATE_SIZE = ("UPDATE `disks` SET `DiskSize` = ?, `Label` = ?"
                      " WHERE `ROWID` = ?")
 _DIR_LIST_SELECT = ("SELECT `fsrecords`.`ROWID`, `fsrecords`.`Name`, "
@@ -27,20 +33,27 @@ class FileUtils(FileManagerDatabase):
             self, db_path: Path):
         super().__init__(db_path, 0)
 
-    def query_disks(self, filter: str) -> List[List[str]]:
+    def query_disks(self, filter: str, cal_size: bool) -> List[List[str]]:
         disks = []
-        for row in self._exec_query(_DISKS_SELECT, (), commit=False):
+        for row in self._exec_query(
+                _DISK_SELECT_SIZE if cal_size else _DISKS_SELECT,
+                (), commit=False):
             if filter and filter not in row[1:3]:
                 continue
+            row = list(row)
+            if cal_size:
+                row.append(round(100 * row[-1] / row[-2], 2))
             disks.append(row)
         return disks
 
-    def list_disks(self, filter: str) -> None:
-        headers = ["DiskID", "UUID", "Label", "DiskSize"]
-        print_table(self.query_disks(filter), headers)
+    def list_disks(self, filter: str, cal_size: bool) -> None:
+        headers = ["DiskID", "UUID", "Label", "DiskSize, MiB"]
+        if cal_size:
+            headers.extend(["FilesSize, MiB", "Usage, %"])
+        print_table(self.query_disks(filter, cal_size), headers)
 
     def update_disk(self, filter: str) -> None:
-        disks = self.query_disks(filter)
+        disks = self.query_disks(filter, False)
         if len(disks) > 1:
             raise ValueError(f"More then one disk is matching UUID {filter}")
         disk_info = get_disk_info(disks[0][1])
@@ -78,7 +91,7 @@ class FileUtils(FileManagerDatabase):
 
 def list_disks_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     """Listing disks."""
-    file_db.list_disks(args.disk)
+    file_db.list_disks(args.disk, args.size)
     return 0
 
 
@@ -118,7 +131,8 @@ def parse_arguments() -> argparse.Namespace:
         "list-disks", help="List disks with statistic")
     list_disks.set_defaults(func=list_disks_command, cmd_name="list-disks")
     list_disks.add_argument(
-        "-s", "--size", help="Calculate used space", action="store_true")
+        "-s", "--size", help="Calculate space used by files",
+        action="store_true")
 
     list_dir = subparsers.add_parser(
         "list-dir", help="List directory with statistic")
