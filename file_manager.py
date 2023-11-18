@@ -3,7 +3,7 @@
 import argparse
 import logging
 from pathlib import Path
-from typing import Callable, List
+from typing import Callable, List, Tuple
 
 from file_database import DEFAULT_DATABASE, FileManagerDatabase
 from file_utils import get_disk_info
@@ -14,6 +14,7 @@ _DISK_SELECT_SIZE = ("SELECT `disks`.`ROWID`, `UUID`, `Label`, "
                      "`DiskSize`/1024, SUM(`FileSize`)/1048576 FROM `disks`"
                      "INNER JOIN `fsrecords` ON `DiskId` = `disks`.`ROWID` "
                      "INNER JOIN `files` ON `files`.`ROWID` = `FileId` "
+                     "WHERE `disks`.`ROWID` IN ({})"
                      "GROUP BY `disks`.`ROWID` "
                      "ORDER BY `disks`.`ROWID`")
 _DISK_UPDATE_SIZE = ("UPDATE `disks` SET `DiskSize` = ?, `Label` = ?"
@@ -33,11 +34,15 @@ class FileUtils(FileManagerDatabase):
             self, db_path: Path):
         super().__init__(db_path, 0)
 
-    def query_disks(self, filter: str, cal_size: bool) -> List[List[str]]:
+    def query_disks(
+            self, filter: str,
+            cal_size: bool = False,
+            id_list: Tuple[int, ...] = ()) -> List[List[str]]:
+        query = (_DISK_SELECT_SIZE.format("?" + ",?" * (len(id_list) - 1))
+                 if cal_size else _DISKS_SELECT)
         disks = []
         for row in self._exec_query(
-                _DISK_SELECT_SIZE if cal_size else _DISKS_SELECT,
-                (), commit=False):
+                query, id_list if id_list else (), commit=False):
             if filter and filter not in row[1:3]:
                 continue
             row = list(row)
@@ -47,13 +52,22 @@ class FileUtils(FileManagerDatabase):
         return disks
 
     def list_disks(self, filter: str, cal_size: bool) -> None:
+        disks_list = self.query_disks(filter)
+        if not disks_list:
+            logging.warning(f"Filter {filter} does not match any disk")
+            return
         headers = ["DiskID", "UUID", "Label", "DiskSize, MiB"]
-        if cal_size:
-            headers.extend(["FilesSize, MiB", "Usage, %"])
-        print_table(self.query_disks(filter, cal_size), headers)
+        if not cal_size:
+            print_table(disks_list, headers)
+            return
+
+        headers.extend(["FilesSize, MiB", "Usage, %"])
+        print_table(self.query_disks(
+            "", cal_size=True,
+            id_list=tuple(int(disk[0]) for disk in disks_list)), headers)
 
     def update_disk(self, filter: str) -> None:
-        disks = self.query_disks(filter, False)
+        disks = self.query_disks(filter)
         if len(disks) > 1:
             raise ValueError(f"More then one disk is matching UUID {filter}")
         disk_info = get_disk_info(disks[0][1])
