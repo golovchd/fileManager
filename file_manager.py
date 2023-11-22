@@ -25,6 +25,19 @@ _DIR_LIST_SELECT = ("SELECT `fsrecords`.`ROWID`, `fsrecords`.`Name`, "
                     " FROM `fsrecords` LEFT JOIN `files`"
                     " ON `files`.`ROWID` = `fsrecords`.`FileId`"
                     " WHERE `ParentId` = ? ORDER BY `FileId`, `Name`")
+_UNIQUE_FILES_SIZE = "SELECT SUM(`FileSize`)/1048576 FROM `files`"
+_UNIQUE_FILES_SIZE_DISKS = ("SELECT `disks`.`ROWID`, `UUID`, `Label`, "
+                            "`DiskSize`/1024, SUM(`Size`)/1048576 FROM `disks`"
+                            "INNER JOIN "
+                            "(SELECT `DiskId`, `FileId`, "
+                            "MIN(`FileSize`) AS `Size` FROM `files` "
+                            "INNER JOIN `fsrecords` "
+                            "ON `files`.`ROWID` = `fsrecords`.`FileId` "
+                            "WHERE `DiskId` IN ({}) "
+                            "GROUP BY `DiskId`, `FileId`) AS `unique_files`"
+                            "ON `unique_files`.`DiskId` = `disks`.`ROWID` "
+                            "GROUP BY `disks`.`ROWID` "
+                            "ORDER BY `disks`.`ROWID`")
 
 
 class FileUtils(FileManagerDatabase):
@@ -36,9 +49,10 @@ class FileUtils(FileManagerDatabase):
 
     def query_disks(
             self, filter: str,
+            size_query: str = _DISK_SELECT_SIZE,
             cal_size: bool = False,
             id_list: Tuple[int, ...] = ()) -> List[List[str]]:
-        query = (_DISK_SELECT_SIZE.format("?" + ",?" * (len(id_list) - 1))
+        query = (size_query.format("?" + ",?" * (len(id_list) - 1))
                  if cal_size else _DISKS_SELECT)
         disks = []
         for row in self._exec_query(
@@ -67,16 +81,29 @@ class FileUtils(FileManagerDatabase):
             id_list=tuple(int(disk[0]) for disk in disks_list)), headers)
 
     def update_disk(self, filter: str) -> None:
-        disks = self.query_disks(filter)
-        if len(disks) > 1:
+        disks_list = self.query_disks(filter)
+        if len(disks_list) > 1:
             raise ValueError(f"More then one disk is matching UUID {filter}")
-        disk_info = get_disk_info(disks[0][1])
+        disk_info = get_disk_info(disks_list[0][1])
         self._exec_query(
             _DISK_UPDATE_SIZE,
             (int(disk_info["fssize"]) // 1024,
              disk_info["label"],
-             disks[0][0]),
+             disks_list[0][0]),
             commit=True)
+
+    def unique_files(self, filter: str) -> None:
+        disks_list = self.query_disks(filter)
+        if not disks_list:
+            logging.warning(f"Filter {filter} does not match any disk")
+            return
+        headers = ["DiskID", "UUID", "Label", "DiskSize, MiB,",
+                   "UniqueFilesSize, MiB", "Unique Usage, %"]
+        print_table(self.query_disks(
+            "", size_query=_UNIQUE_FILES_SIZE_DISKS, cal_size=True,
+            id_list=tuple(int(disk[0]) for disk in disks_list)), headers)
+        for row in self._exec_query(_UNIQUE_FILES_SIZE, (), commit=False):
+            print(f"Total size of unique files is {row[0]} MiB")
 
     def list_dir(self, disk: str, dir_path: str) -> None:
         self.set_disk_by_name(disk)
@@ -120,6 +147,11 @@ def update_disk_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     return 0
 
 
+def unique_files_command(file_db: FileUtils, args: argparse.Namespace) -> int:
+    file_db.unique_files(args.disk)
+    return 0
+
+
 def parse_arguments() -> argparse.Namespace:
     """CLI arguments parser."""
     arg_parser = argparse.ArgumentParser(
@@ -158,6 +190,11 @@ def parse_arguments() -> argparse.Namespace:
     update_disk = subparsers.add_parser(
         "update-disk", help="Update disk with given UUID")
     update_disk.set_defaults(func=update_disk_command, cmd_name="update-disk")
+
+    unique_files = subparsers.add_parser(
+        "unique-files", help="Calculate size of unique files")
+    unique_files.set_defaults(
+        func=unique_files_command, cmd_name="unique-files")
 
     args = arg_parser.parse_args()
     if args.cmd_name == "list-dir" and not args.disk:
