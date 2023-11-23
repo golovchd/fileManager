@@ -97,11 +97,25 @@ class FileUtils(FileManagerDatabase):
         if not disks_list:
             logging.warning(f"Filter {filter} does not match any disk")
             return
-        headers = ["DiskID", "UUID", "Label", "DiskSize, MiB,",
-                   "UniqueFilesSize, MiB", "Unique Usage, %"]
-        print_table(self.query_disks(
-            "", size_query=_UNIQUE_FILES_SIZE_DISKS, cal_size=True,
-            id_list=tuple(int(disk[0]) for disk in disks_list)), headers)
+        id_list = tuple(int(disk[0]) for disk in disks_list)
+        disk_usage = self.query_disks("", cal_size=True, id_list=id_list)
+        unique_files = self.query_disks(
+            "", size_query=_UNIQUE_FILES_SIZE_DISKS,
+            cal_size=True, id_list=id_list)
+        for index in range(len(unique_files)):
+            unique_files[index].insert(4, disk_usage[index][4])
+            unique_files[index].insert(-1, disk_usage[index][-1])
+            unique_files[index].append(str(round(
+                100 * int(unique_files[index][5]) /
+                int(unique_files[index][4]),
+                2)))
+
+        headers = [
+            "DiskID", "UUID", "Label", "DiskSize, MiB", "FilesSize, MiB",
+            "UniqueFiles, MiB", "Usage, %", "Unique Usage, %", "Unique %",
+        ]
+        print_table(unique_files, headers)
+
         for row in self._exec_query(_UNIQUE_FILES_SIZE, (), commit=False):
             print(f"Total size of unique files is {row[0]} MiB")
 
@@ -238,6 +252,8 @@ def parse_arguments() -> argparse.Namespace:
         "unique-files", help="Calculate size of unique files")
     unique_files.set_defaults(
         func=unique_files_command, cmd_name="unique-files")
+    unique_files.add_argument(
+        "-s", "--sort", help="Print only summary", action="store_true")
 
     args = arg_parser.parse_args()
     if args.cmd_name == "list-dir" and not args.disk:
