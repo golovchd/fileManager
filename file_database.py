@@ -165,7 +165,7 @@ class FileManagerDatabase(SQLite3connection):
             raise ValueError(
                 f"DB does not have info on disk with UUID={name} "
                 f"or label={name}")
-        logging.info(
+        logging.debug(
             f"Processing disk id={self._disk_id}, size={self._disk_size}, "
             f"label={self._disk_label}, UUID={self._disk_uuid}")
 
@@ -307,6 +307,10 @@ class FileManagerDatabase(SQLite3connection):
             self, sha1: str, mtime: float, size: int,
             file_name: str, file_type: str) -> int:
         """Select and update or insert file record."""
+        if not sha1:
+            raise ValueError("Empty SHA1 for file {file_name}")
+        if not file_name:
+            raise ValueError("Empty file_name for file with SHA1 {sha1}")
         file_id = self.select_file_id(sha1, mtime)
         if file_id:
             return file_id
