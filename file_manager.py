@@ -105,29 +105,69 @@ class FileUtils(FileManagerDatabase):
         for row in self._exec_query(_UNIQUE_FILES_SIZE, (), commit=False):
             print(f"Total size of unique files is {row[0]} MiB")
 
-    def list_dir(self, disk: str, dir_path: str) -> None:
+    def list_dir(
+                self, disk: str, dir_path: str, recursive: bool,
+                summary: bool = False, only_count: bool = False
+            ) -> Tuple[int, int, int]:
         self.set_disk_by_name(disk)
         self._cur_dir_id = self.get_dir_id(
             dir_path.split("/"), insert_dirs=False)
         logging.debug(
             f"Listing dir {self.disk_name}/{dir_path} id={self._cur_dir_id}")
         dir_content = []
+        dir_size = 0
+        files_count = 0
+        subdir_count = 0
         for row in self._exec_query(
                 _DIR_LIST_SELECT, (self._cur_dir_id,), commit=False):
             dir_content.append(row)
-        headers = ["Name", "Size", "File Date", "Hash Date, SHA256"]
-        indexes = [1, 5, 2, 3, 6]
-        formats: List[Callable] = [
-            str,
-            lambda x: str(x) if x else "dir",
-            timestamp2exif_str,
-            timestamp2exif_str,
-            str
-        ]
-        aligns = ["<", ">", ">", ">", "<"]
-        print_table(
-            dir_content, headers, indexes=indexes,
-            formats=formats, aligns=aligns)
+            print(dir_content[-1])
+            dir_size += int(row[5]) if row[5] else 0
+            if row[5]:
+                files_count += 1
+            else:
+                subdir_count += 1
+
+        if not (summary or only_count):
+            print_dir_content(dir_path, dir_content)
+
+        if not only_count and (not recursive or subdir_count and not summary):
+            suffix = " (not counted)" if subdir_count else ""
+            print(f"Size of files in {dir_path} is {dir_size}B, contains "
+                  f"{files_count} files and {subdir_count} subdirs {suffix}")
+        if not recursive:
+            return dir_size, files_count, subdir_count
+
+        for record in dir_content:
+            if record[5] is not None:
+                continue
+            subdir_size, subdir_files_count, subdir_dirs_count = self.list_dir(
+                disk, f"{dir_path}/{record[1]}", True,
+                only_count=summary or only_count)
+            dir_size += subdir_size
+            files_count += subdir_files_count
+            subdir_count += subdir_dirs_count
+        if not only_count:
+            print(f"Size of files in {dir_path} with subdirs is {dir_size} B, "
+                  f"contains {files_count} files and {subdir_count} subdirs")
+        return dir_size, files_count, subdir_count
+
+
+def print_dir_content(dir_path: str, dir_content: List[List[str]]) -> None:
+    headers = ["Name", "Size", "File Date", "Hash Date, SHA256"]
+    indexes = [1, 5, 2, 3, 6]
+    formats: List[Callable] = [
+        str,
+        lambda x: str(x) if x else "dir",
+        timestamp2exif_str,
+        timestamp2exif_str,
+        str
+    ]
+    aligns = ["<", ">", ">", ">", "<"]
+    print(f"Listing dir: {dir_path}")
+    print_table(
+        dir_content, headers, indexes=indexes,
+        formats=formats, aligns=aligns)
 
 
 def list_disks_command(file_db: FileUtils, args: argparse.Namespace) -> int:
@@ -138,7 +178,8 @@ def list_disks_command(file_db: FileUtils, args: argparse.Namespace) -> int:
 
 def list_dir_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     """Listing directory."""
-    file_db.list_dir(args.disk, args.dir_path)
+    file_db.list_dir(
+        args.disk, args.dir_path, args.recursive, summary=args.summary)
     return 0
 
 
@@ -184,8 +225,10 @@ def parse_arguments() -> argparse.Namespace:
         "list-dir", help="List directory with statistic")
     list_dir.set_defaults(func=list_dir_command, cmd_name="list-dir")
     list_dir.add_argument("dir_path", type=str, help="Path to dir to list")
-    list_disks.add_argument(
+    list_dir.add_argument(
         "-r", "--recursive", help="List dir recursively", action="store_true")
+    list_dir.add_argument(
+        "-s", "--summary", help="Print only summary", action="store_true")
 
     update_disk = subparsers.add_parser(
         "update-disk", help="Update disk with given UUID")
