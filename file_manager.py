@@ -40,6 +40,12 @@ _UNIQUE_FILES_SIZE_DISKS = ("SELECT `disks`.`ROWID`, `UUID`, `Label`, "
                             "ORDER BY `disks`.`ROWID`")
 
 
+_SORT_OPTIONS = ["id", "uuid", "label", "disk-size", "files-size", "usage"]
+_SORT_OPTIONS_UNIQUE = _SORT_OPTIONS[:]
+_SORT_OPTIONS_UNIQUE.insert(5, "unique-size")
+_SORT_OPTIONS_UNIQUE += ["unique-usage", "unique-percent"]
+
+
 class FileUtils(FileManagerDatabase):
     """Representation of fileManager database and relevant queries."""
 
@@ -65,7 +71,7 @@ class FileUtils(FileManagerDatabase):
             disks.append(row)
         return disks
 
-    def list_disks(self, filter: str, cal_size: bool) -> None:
+    def list_disks(self, filter: str, cal_size: bool, sort_by: str) -> None:
         disks_list = self.query_disks(filter)
         if not disks_list:
             logging.warning(f"Filter {filter} does not match any disk")
@@ -76,9 +82,13 @@ class FileUtils(FileManagerDatabase):
             return
 
         headers.extend(["FilesSize, MiB", "Usage, %"])
-        print_table(self.query_disks(
-            "", cal_size=True,
-            id_list=tuple(int(disk[0]) for disk in disks_list)), headers)
+        id_list = tuple(int(disk[0]) for disk in disks_list)
+        disk_usage = self.query_disks("", cal_size=True, id_list=id_list)
+        sort_idx = _SORT_OPTIONS.index(sort_by)
+        if sort_idx >= len(disk_usage[0]):
+            sort_idx = 0
+        print_table(sorted(disk_usage, key=lambda info: info[sort_idx]),
+                    headers)
 
     def update_disk(self, filter: str) -> None:
         disks_list = self.query_disks(filter)
@@ -92,7 +102,7 @@ class FileUtils(FileManagerDatabase):
              disks_list[0][0]),
             commit=True)
 
-    def unique_files(self, filter: str) -> None:
+    def unique_files(self, filter: str, sort_by: str) -> None:
         disks_list = self.query_disks(filter)
         if not disks_list:
             logging.warning(f"Filter {filter} does not match any disk")
@@ -114,7 +124,11 @@ class FileUtils(FileManagerDatabase):
             "DiskID", "UUID", "Label", "DiskSize, MiB", "FilesSize, MiB",
             "UniqueFiles, MiB", "Usage, %", "Unique Usage, %", "Unique %",
         ]
-        print_table(unique_files, headers)
+        sort_idx = _SORT_OPTIONS_UNIQUE.index(sort_by)
+        if sort_idx >= len(unique_files[0]):
+            sort_idx = 0
+        print_table(sorted(unique_files, key=lambda info: info[sort_idx]),
+                    headers)
 
         for row in self._exec_query(_UNIQUE_FILES_SIZE, (), commit=False):
             print(f"Total size of unique files is {row[0]} MiB")
@@ -186,7 +200,7 @@ def print_dir_content(dir_path: str, dir_content: List[List[str]]) -> None:
 
 def list_disks_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     """Listing disks."""
-    file_db.list_disks(args.disk, args.size)
+    file_db.list_disks(args.disk, args.size, args.sort)
     return 0
 
 
@@ -203,7 +217,7 @@ def update_disk_command(file_db: FileUtils, args: argparse.Namespace) -> int:
 
 
 def unique_files_command(file_db: FileUtils, args: argparse.Namespace) -> int:
-    file_db.unique_files(args.disk)
+    file_db.unique_files(args.disk, args.sort)
     return 0
 
 
@@ -234,6 +248,9 @@ def parse_arguments() -> argparse.Namespace:
     list_disks.add_argument(
         "-s", "--size", help="Calculate space used by files",
         action="store_true")
+    list_disks.add_argument(
+        "--sort", help="Sort output", choices=_SORT_OPTIONS,
+        default=_SORT_OPTIONS[0])
 
     list_dir = subparsers.add_parser(
         "list-dir", help="List directory with statistic")
@@ -253,7 +270,8 @@ def parse_arguments() -> argparse.Namespace:
     unique_files.set_defaults(
         func=unique_files_command, cmd_name="unique-files")
     unique_files.add_argument(
-        "-s", "--sort", help="Print only summary", action="store_true")
+        "--sort", help="Sort output", choices=_SORT_OPTIONS_UNIQUE,
+        default=_SORT_OPTIONS_UNIQUE[0])
 
     args = arg_parser.parse_args()
     if args.cmd_name == "list-dir" and not args.disk:
