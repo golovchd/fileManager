@@ -5,7 +5,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 from file_database import DEFAULT_DATABASE, FileManagerDatabase
 
@@ -29,6 +29,9 @@ SELECT_DIR_FILES = ("SELECT `fsrecords`.`ROWID`, `FileId`, `ParentId`, "
                     "INNER JOIN `files` ON `files`.`ROWID` = `FileId`"
                     "WHERE `ParentId` IN (?, ?) "
                     "ORDER BY `ParentId`, `FileId`")
+SELECT_SUBDIRS = ("SELECT `ROWID`, `Name`, `ParentId` FROM `fsrecords` "
+                  "WHERE `ParentId` IN (?, ?) AND `FileId` IS NULL "
+                  "ORDER BY `ParentId`, `Name`")
 
 
 class FileDuplicates(FileManagerDatabase):
@@ -46,12 +49,22 @@ class FileDuplicates(FileManagerDatabase):
                                  int]]:
         dir_a_files = []
         dir_b_files = []
+        dir_a_subdirs = []
+        dir_b_subdirs = []
+        for row in self._exec_query(
+                SELECT_SUBDIRS, (dir_a, dir_b), commit=False):
+            if row[1] == dir_a:
+                dir_a_subdirs.append(row)
+            else:
+                dir_b_subdirs.append(row)
+
+        dir_a_path = self.get_path(dir_a)
+        dir_b_path = self.get_path(dir_b)
         logging.debug(
-            f"comparing Dir pair {self.get_path(dir_a)},{self.get_path(dir_b)}"
+            f"comparing Dir pair {dir_a_path},{dir_b_path}"
             f" ({dir_a},{dir_b}) for max {max_diff} diff files")
-        for row in self._exec_query(SELECT_DIR_FILES,
-                                    (dir_a, dir_b),
-                                    commit=False):
+        for row in self._exec_query(
+                SELECT_DIR_FILES, (dir_a, dir_b), commit=False):
             if int(row[2]) == int(dir_a):
                 dir_a_files.append((row[1], row[3]))
             else:
@@ -60,40 +73,52 @@ class FileDuplicates(FileManagerDatabase):
             file[1] for file in dir_a_files if file in dir_b_files
         ])
         if dir_a_files == dir_b_files:
-            logging.info(f"Dir {self.get_path(dir_a)} is matching "
-                         f"{self.get_path(dir_b)} with 0 differences")
+            logging.info(f"Dir {dir_a_path} is matching "
+                         f"{dir_b_path} with 0 differences")
+            log_subdirs_info(
+                dir_a_path, dir_b_path, dir_a_subdirs, dir_b_subdirs)
             return {f"{dir_a},{dir_b}": ([], [], matching_size)}
 
         a_not_b = [a for a in dir_a_files if a not in dir_b_files]
         b_not_a = [b for b in dir_b_files if b not in dir_a_files]
         result = {f"{dir_a},{dir_b}": (a_not_b, b_not_a, matching_size)}
         if not a_not_b:
-            logging.info(f"Files of dir {self.get_path(dir_a)} contained "
-                         f"in {self.get_path(dir_b)}")
+            logging.info(f"Files of dir {dir_a_path} contained "
+                         f"in {dir_b_path}")
+            log_subdirs_info(
+                dir_a_path, dir_b_path, dir_a_subdirs, dir_b_subdirs)
             return result
         if not b_not_a:
-            logging.info(f"Files of {self.get_path(dir_b)} "
-                         f"contained in {self.get_path(dir_a)}")
+            logging.info(f"Files of {dir_b_path} "
+                         f"contained in {dir_a_path}")
+            log_subdirs_info(
+                dir_a_path, dir_b_path, dir_a_subdirs, dir_b_subdirs)
             return result
 
         diff_count = len(a_not_b) + len(b_not_a)
         if diff_count <= max_diff:
             logging.info(
-                f"Dir {self.get_path(dir_a)} is matching "
-                f"{self.get_path(dir_b)} with {diff_count} differences")
+                f"Dir {dir_a_path} is matching "
+                f"{dir_b_path} with {diff_count} differences")
+            log_subdirs_info(
+                dir_a_path, dir_b_path, dir_a_subdirs, dir_b_subdirs)
             return result
         if len(a_not_b) <= max_diff:
-            logging.info(f"Files of {self.get_path(dir_a)} contained in "
-                         f"{self.get_path(dir_b)} with "
+            logging.info(f"Files of {dir_a_path} contained in "
+                         f"{dir_b_path} with "
                          f"all but {len(a_not_b)} files")
+            log_subdirs_info(
+                dir_a_path, dir_b_path, dir_a_subdirs, dir_b_subdirs)
             return result
         if len(b_not_a) <= max_diff:
-            logging.info(f"Files of {self.get_path(dir_b)} contained in "
-                         f"{self.get_path(dir_a)} with "
+            logging.info(f"Files of {dir_b_path} contained in "
+                         f"{dir_a_path} with "
                          f"all but {len(b_not_a)} files")
+            log_subdirs_info(
+                dir_a_path, dir_b_path, dir_a_subdirs, dir_b_subdirs)
             return result
         logging.debug(
-            f"Dir {self.get_path(dir_a)} different from {self.get_path(dir_b)}"
+            f"Dir {dir_a_path} different from {dir_b_path}"
             f" with {diff_count} differences")
         return {}
 
@@ -124,7 +149,7 @@ class FileDuplicates(FileManagerDatabase):
             else:
                 status = "unexpected"
 
-            print(f"{duplicate_dirs[dir_pair][2]} {status}: "
+            print(f"{duplicate_dirs[dir_pair][2]} B {status}: "
                   f"'{self.get_path(int(pair[0]))}' "
                   f"'{self.get_path(int(pair[1]))}'")
 
@@ -150,6 +175,16 @@ class FileDuplicates(FileManagerDatabase):
                         dirs[i], dirs[j], max_diff))
                     checked_dirs[f"{dirs[i]},{dirs[j]}"] = True
         self.sort_output_duplicate_dirs(duplicate_dirs, max_diff)
+
+
+def log_subdirs_info(
+        dir_a_path: str, dir_b_path: str,
+        dir_a_subdirs: List[Any], dir_b_subdirs: List[Any]
+) -> None:
+    if dir_a_subdirs:
+        logging.info(f"Dir {dir_a_path} have subdirs: {dir_a_subdirs}")
+    if dir_b_subdirs:
+        logging.info(f"Dir {dir_b_path} have subdirs: {dir_b_subdirs}")
 
 
 def main(argv):
