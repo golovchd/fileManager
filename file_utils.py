@@ -114,8 +114,8 @@ def read_file(
     """Returns name, type, size, mtime, sha1 of file."""
     file_stat = file_path.stat()
     file_name = file_path.name
-    file_name_parts = file_name.split('.')
-    if len(file_name_parts) > 1:
+    file_name_parts = file_name.split(".")
+    if len(file_name_parts) > 1 and file_name_parts[0]:
         file_type = file_name_parts[-1]
         file_name = ".".join(file_name_parts[:-1])
     else:

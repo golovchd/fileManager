@@ -36,6 +36,8 @@ class FileDatabaseUpdater(FileManagerDatabase):
                             f"fsrecord_id={fsrecord_id}")
             return 0, size, 0   # Skip file if unable to read
 
+        logging.debug(f"Update fsrecord {fsrecord_id} from {file_path}, "
+                      f"SHA1={sha1}, {size} B, {file_name} {file_type}")
         new_file_id = self.select_update_file_record(
             sha1, mtime, size, file_name, file_type
         )
@@ -132,7 +134,7 @@ class FileDatabaseUpdater(FileManagerDatabase):
         """Removes fsrecords and file orfans."""
         for i in range(_MAX_ORFAN_SEARCH_DEPTH):
             count = self.remove_fsrecords_orfans()
-            logging.info(f"handle_orfans: Found {i} removed "
+            logging.info(f"handle_orfans: Round {i} removed "
                          f"{count} orfans from fsrecords")
             if not count:
                 break
