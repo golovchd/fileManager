@@ -41,12 +41,20 @@ class FileDuplicates(FileManagerDatabase):
             self, db_path: Path, min_size: int):
         super().__init__(db_path, 0)
         self._min_size = min_size
+        self.checked_dirs: Dict[str, bool] = {}
+        self.duplicate_dirs: Dict[str, Tuple[List[Tuple[int, int]],
+                                             List[Tuple[int, int]],
+                                             int]] = {}
 
-    def compare_dirs(
-            self, dir_a: int, dir_b: int, max_diff: int
-            ) -> Dict[str, Tuple[List[Tuple[int, int]],
-                                 List[Tuple[int, int]],
-                                 int]]:
+    def mark_as_checked(self, dir_a: int, dir_b: int, match: bool) -> bool:
+        self.checked_dirs[f"{dir_a},{dir_b}"] = match
+        self.checked_dirs[f"{dir_b},{dir_a}"] = match
+        return match
+
+    def compare_dirs(self, dir_a: int, dir_b: int, max_diff: int) -> bool:
+        if f"{dir_a},{dir_b}" in self.checked_dirs:
+            logging.debug(f"Dir pair {dir_a},{dir_b} was tested before")
+            return self.checked_dirs[f"{dir_b},{dir_a}"]
         dir_a_files = []
         dir_b_files = []
         dir_a_subdirs = []
@@ -72,12 +80,19 @@ class FileDuplicates(FileManagerDatabase):
         matching_size = sum([
             file[1] for file in dir_a_files if file in dir_b_files
         ])
+
         if dir_a_files == dir_b_files:
             logging.info(f"Dir {dir_a_path} is matching "
                          f"{dir_b_path} with 0 differences")
             log_subdirs_info(
                 dir_a_path, dir_b_path, dir_a_subdirs, dir_b_subdirs)
-            return {f"{dir_a},{dir_b}": ([], [], matching_size)}
+            result: Dict[
+                str,
+                Tuple[List[Tuple[int, int]],
+                      List[Tuple[int, int]],
+                      int]] = {f"{dir_a},{dir_b}": ([], [], matching_size)}
+            self.duplicate_dirs.update(result)
+            return self.mark_as_checked(dir_a, dir_b, True)
 
         a_not_b = [a for a in dir_a_files if a not in dir_b_files]
         b_not_a = [b for b in dir_b_files if b not in dir_a_files]
@@ -87,13 +102,15 @@ class FileDuplicates(FileManagerDatabase):
                          f"in {dir_b_path}")
             log_subdirs_info(
                 dir_a_path, dir_b_path, dir_a_subdirs, dir_b_subdirs)
-            return result
+            self.duplicate_dirs.update(result)
+            return self.mark_as_checked(dir_a, dir_b, True)
         if not b_not_a:
             logging.info(f"Files of {dir_b_path} "
                          f"contained in {dir_a_path}")
             log_subdirs_info(
                 dir_a_path, dir_b_path, dir_a_subdirs, dir_b_subdirs)
-            return result
+            self.duplicate_dirs.update(result)
+            return self.mark_as_checked(dir_a, dir_b, True)
 
         diff_count = len(a_not_b) + len(b_not_a)
         if diff_count <= max_diff:
@@ -102,60 +119,57 @@ class FileDuplicates(FileManagerDatabase):
                 f"{dir_b_path} with {diff_count} differences")
             log_subdirs_info(
                 dir_a_path, dir_b_path, dir_a_subdirs, dir_b_subdirs)
-            return result
+            self.duplicate_dirs.update(result)
+            return self.mark_as_checked(dir_a, dir_b, True)
         if len(a_not_b) <= max_diff:
             logging.info(f"Files of {dir_a_path} contained in "
                          f"{dir_b_path} with "
                          f"all but {len(a_not_b)} files")
             log_subdirs_info(
                 dir_a_path, dir_b_path, dir_a_subdirs, dir_b_subdirs)
-            return result
+            self.duplicate_dirs.update(result)
+            return self.mark_as_checked(dir_a, dir_b, True)
         if len(b_not_a) <= max_diff:
             logging.info(f"Files of {dir_b_path} contained in "
                          f"{dir_a_path} with "
                          f"all but {len(b_not_a)} files")
             log_subdirs_info(
                 dir_a_path, dir_b_path, dir_a_subdirs, dir_b_subdirs)
-            return result
+            self.duplicate_dirs.update(result)
+            return self.mark_as_checked(dir_a, dir_b, True)
         logging.debug(
             f"Dir {dir_a_path} different from {dir_b_path}"
             f" with {diff_count} differences")
-        return {}
+        return self.mark_as_checked(dir_a, dir_b, False)
 
-    def sort_output_duplicate_dirs(
-            self, duplicate_dirs: Dict[str, Tuple[List[Tuple[int, int]],
-                                                  List[Tuple[int, int]],
-                                                  int]], max_diff: int
-            ) -> None:
+    def sort_output_duplicate_dirs(self, max_diff: int) -> None:
         sorted_duplicates = sorted(
-            duplicate_dirs.keys(),
-            key=lambda pair: duplicate_dirs[pair][2], reverse=True)
+            self.duplicate_dirs.keys(),
+            key=lambda pair: self.duplicate_dirs[pair][2], reverse=True)
         for dir_pair in sorted_duplicates:
             pair = dir_pair.split(",")
-            if not (duplicate_dirs[dir_pair][0] or
-                    duplicate_dirs[dir_pair][1]):
+            if not (self.duplicate_dirs[dir_pair][0] or
+                    self.duplicate_dirs[dir_pair][1]):
                 status = "full_match"
-            elif not duplicate_dirs[dir_pair][0]:
+            elif not self.duplicate_dirs[dir_pair][0]:
                 status = "left_in_right"
-            elif not duplicate_dirs[dir_pair][1]:
+            elif not self.duplicate_dirs[dir_pair][1]:
                 status = "right_in_left"
-            elif (len(duplicate_dirs[dir_pair][0]) +
-                  len(duplicate_dirs[dir_pair][1])) <= max_diff:
+            elif (len(self.duplicate_dirs[dir_pair][0]) +
+                  len(self.duplicate_dirs[dir_pair][1])) <= max_diff:
                 status = f"mismatch_under_{max_diff}"
-            elif len(duplicate_dirs[dir_pair][0]) <= max_diff:
+            elif len(self.duplicate_dirs[dir_pair][0]) <= max_diff:
                 status = f"left_mismatch_right_under_{max_diff}"
-            elif len(duplicate_dirs[dir_pair][1]) <= max_diff:
+            elif len(self.duplicate_dirs[dir_pair][1]) <= max_diff:
                 status = f"right_mismatch_left_under_{max_diff}"
             else:
                 status = "unexpected"
 
-            print(f"{duplicate_dirs[dir_pair][2]} B {status}: "
+            print(f"{self.duplicate_dirs[dir_pair][2]} B {status}: "
                   f"'{self.get_path(int(pair[0]))}' "
                   f"'{self.get_path(int(pair[1]))}'")
 
     def search_duplicate_folders(self, max_diff: int) -> None:
-        checked_dirs = {}
-        duplicate_dirs = {}
         for row in self._exec_query(DUPLICATES_FOLDERS,
                                     (self._disk_id, self._min_size),
                                     commit=False):
@@ -166,15 +180,8 @@ class FileDuplicates(FileManagerDatabase):
                 for j in range(i + 1, len(dirs)):
                     if dirs[i] == dirs[j]:
                         continue
-                    if (f"{dirs[i]},{dirs[j]}" in checked_dirs or
-                            f"{dirs[j]},{dirs[i]}" in checked_dirs):
-                        logging.debug(
-                            f"Dir pair {dirs[i]},{dirs[j]} was tested before")
-                        continue
-                    duplicate_dirs.update(self.compare_dirs(
-                        dirs[i], dirs[j], max_diff))
-                    checked_dirs[f"{dirs[i]},{dirs[j]}"] = True
-        self.sort_output_duplicate_dirs(duplicate_dirs, max_diff)
+                    self.compare_dirs(dirs[i], dirs[j], max_diff)
+        self.sort_output_duplicate_dirs(max_diff)
 
 
 def log_subdirs_info(
