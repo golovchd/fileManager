@@ -34,12 +34,16 @@ SELECT_DIR_FILES = ("SELECT `fsrecords`.`ROWID`, `FileId`, `ParentId`, "
 SELECT_SUBDIRS = ("SELECT `ROWID`, `Name`, `ParentId` FROM `fsrecords` "
                   "WHERE `ParentId` IN (?, ?) AND `FileId` IS NULL "
                   "ORDER BY `ParentId`, `Name`")
-SELECT_COPIES_IN_DIR = ("SELECT `FileId`, `ParentId`, `FileSize`,"
-                        "GROUP_CONCAT(`fsrecords`.`ROWID`)"
-                        "FROM `fsrecords`"
-                        "INNER JOIN `files` ON `files`.`ROWID` = A.`FileId`"
-                        "GROUP BY `ParentId`, `FileId`, `FileSize`"
-                        "ORDER BY `ParentId`, `FileId`")
+SELECT_COPIES_IN_DIR = ("SELECT *, `FileSize`*(duplicates_count-1) AS dup_size"
+                        " FROM (SELECT `FileId`, `ParentId`, `FileSize`, "
+                        "GROUP_CONCAT(`fsrecords`.`ROWID`) AS records, "
+                        "COUNT(*) AS duplicates_count "
+                        "FROM `fsrecords` "
+                        "INNER JOIN `files` ON `files`.`ROWID` = `FileId` "
+                        "WHERE `DiskId` = ? AND `FileSize` > ? "
+                        "GROUP BY `ParentId`, `FileId`, `FileSize`) "
+                        "WHERE duplicates_count > 1 "
+                        "ORDER BY dup_size DESC, `ParentId`, `FileId`")
 
 
 @dataclass
@@ -334,6 +338,25 @@ class FileDuplicates(FileManagerDatabase):
                      f"duplicate_dirs_count={len(self.duplicate_dirs)}, "
                      )
 
+    def search_file_copies_in_folder(self) -> None:
+        reclaim_size = 0
+        reclaim_groups = 0
+        files_to_delete = 0
+        for row in self._exec_query(SELECT_COPIES_IN_DIR,
+                                    (self._disk_id, self._min_size),
+                                    commit=False):
+            reclaim_size += row[5]
+            reclaim_groups += 1
+            files_to_delete += row[4] - 1
+            print(
+                f"Folder {self.get_path(row[1])} have group of {row[4]} same "
+                f"by content files, size to reclaim {row[5]}B, {row[2]}B each:"
+            )
+            for file_record in row[3].split(","):
+                print(self.get_path(file_record))
+        print(f"In-folders duplicates: {reclaim_groups} groups, "
+              f"{files_to_delete} files to delete, {reclaim_size}B to reclaim")
+
 
 def log_subdirs_info(
         dir_a_path: str, dir_b_path: str,
@@ -380,6 +403,7 @@ def main(argv):
 
     with FileDuplicates(args.database, args.min_size) as file_db:
         file_db.set_disk_by_name(args.uuid or args.label)
+        file_db.search_file_copies_in_folder()
         file_db.search_duplicate_folders(args.max_diff)
 
 
