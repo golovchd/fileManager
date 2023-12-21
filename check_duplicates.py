@@ -10,6 +10,7 @@ from time import CLOCK_MONOTONIC, clock_gettime_ns
 from typing import Any, Dict, List, Set, Tuple
 
 from file_database import DEFAULT_DATABASE, FileManagerDatabase
+from file_manager import get_disk_info
 
 DEFAULT_MIN_SIZE = 1000000  # 1 MB
 
@@ -83,6 +84,11 @@ class FileDuplicates(FileManagerDatabase):
         self.empty_dirs: Set[int] = set()  # Dirs w/o files in any subdirs
         self.non_empty_dirs: Set[int] = set()
         self.duplicate_dirs: Dict[DirsPair, DirsDifference] = {}
+        self.mountpoint: Path = Path(".")
+
+    def set_mountpoint(self):
+        """Request lsblk disk info, raises ValueError if not mounted."""
+        self.mountpoint = Path(get_disk_info(self._disk_uuid)["mountpoint"])
 
     def process_profile(
             self, dir_a: int, dir_b: int, match: bool,
@@ -338,8 +344,9 @@ class FileDuplicates(FileManagerDatabase):
                      f"duplicate_dirs_count={len(self.duplicate_dirs)}, "
                      )
 
-    def search_file_copies_in_folder(self) -> None:
+    def search_file_copies_in_folder(self, clenaup: bool) -> None:
         reclaim_size = 0
+        reclaimed_size = 0
         reclaim_groups = 0
         files_to_delete = 0
         for row in self._exec_query(SELECT_COPIES_IN_DIR,
@@ -352,10 +359,42 @@ class FileDuplicates(FileManagerDatabase):
                 f"Folder {self.get_path(row[1])} have group of {row[4]} same "
                 f"by content files, size to reclaim {row[5]}B, {row[2]}B each:"
             )
-            for file_record in row[3].split(","):
-                print(self.get_path(file_record))
+            files_counter = 0
+            files_list = row[3].split(",")
+            for file_record in files_list:
+                files_counter += 1
+                print(f"{files_counter}: {self.get_path(file_record)}")
+            if clenaup:
+                reclaimed_size += (
+                    self.in_folder_cleanup_action(files_list) * row[2])
         print(f"In-folders duplicates: {reclaim_groups} groups, "
               f"{files_to_delete} files to delete, {reclaim_size}B to reclaim")
+
+    def in_folder_cleanup_action(self, file_id_list: List[str]) -> int:
+        keep_idx = -1
+        dupolicates_count = len(file_id_list)
+        while keep_idx < 0 or keep_idx > dupolicates_count:
+            try:
+                value = input("Select file to keep, enter 0 to skip clenup: ")
+                keep_idx = int(value)
+            except ValueError:
+                print(f"{value} is not a correct index, please enter number "
+                      f"0..{dupolicates_count}")
+        if not keep_idx:
+            return 0
+        file_path = self.mountpoint / self.get_path(
+            int(file_id_list[keep_idx - 1]))
+        if not file_path.exists():
+            raise ValueError(
+                f"Selected to keep {file_path} is missing on disk.")
+        for idx in range(dupolicates_count):
+            if idx + 1 == keep_idx:
+                continue
+            file_path = self.mountpoint / self.get_path(int(file_id_list[idx]))
+            if file_path.exists():
+                print(f"Deleting {file_path}")
+                file_path.unlink()
+        return dupolicates_count - 1
 
 
 def log_subdirs_info(
@@ -393,6 +432,9 @@ def main(argv):
         type=int,
         help="Minimum size of the file to check duplicate.",
         default=DEFAULT_MIN_SIZE)
+    arg_parser.add_argument("-c", "--clenaup",
+                            help="Run inteructive cleanup mode",
+                            action="store_true")
     arg_parser.add_argument("-v", "--verbose",
                             help="Print verbose output",
                             action="count", default=0)
@@ -403,7 +445,9 @@ def main(argv):
 
     with FileDuplicates(args.database, args.min_size) as file_db:
         file_db.set_disk_by_name(args.uuid or args.label)
-        file_db.search_file_copies_in_folder()
+        if args.clenaup:
+            file_db.set_mountpoint()
+        file_db.search_file_copies_in_folder(args.clenaup)
         file_db.search_duplicate_folders(args.max_diff)
 
 
