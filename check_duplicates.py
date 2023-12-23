@@ -6,6 +6,7 @@ import logging
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from sqlite3 import OperationalError
 from time import CLOCK_MONOTONIC, clock_gettime_ns
 from typing import Any, Dict, List, Set, Tuple
 
@@ -45,6 +46,7 @@ SELECT_COPIES_IN_DIR = ("SELECT *, `FileSize`*(duplicates_count-1) AS dup_size"
                         "GROUP BY `ParentId`, `FileId`, `FileSize`) "
                         "WHERE duplicates_count > 1 "
                         "ORDER BY dup_size DESC, `ParentId`, `FileId`")
+DELETE_FSRECORD = "DELETE FROM `fsrecords` WHERE `ROWID` = ?"
 
 
 @dataclass
@@ -370,31 +372,47 @@ class FileDuplicates(FileManagerDatabase):
         print(f"In-folders duplicates: {reclaim_groups} groups, "
               f"{files_to_delete} files to delete, {reclaim_size}B to reclaim")
 
-    def in_folder_cleanup_action(self, file_id_list: List[str]) -> int:
+    def in_folder_cleanup_action(self, fsrecord_id_list: List[str]) -> int:
         keep_idx = -1
-        dupolicates_count = len(file_id_list)
-        while keep_idx < 0 or keep_idx > dupolicates_count:
+        duplicates_count = len(fsrecord_id_list)
+        while keep_idx < 0 or keep_idx > duplicates_count:
             try:
                 value = input("Select file to keep, enter 0 to skip clenup: ")
                 keep_idx = int(value)
             except ValueError:
                 print(f"{value} is not a correct index, please enter number "
-                      f"0..{dupolicates_count}")
+                      f"0..{duplicates_count}")
         if not keep_idx:
             return 0
         file_path = self.mountpoint / self.get_path(
-            int(file_id_list[keep_idx - 1]))
+            int(fsrecord_id_list[keep_idx - 1]))
         if not file_path.exists():
             raise ValueError(
                 f"Selected to keep {file_path} is missing on disk.")
-        for idx in range(dupolicates_count):
+        delete_list: List[int] = []
+        for idx in range(duplicates_count):
             if idx + 1 == keep_idx:
                 continue
-            file_path = self.mountpoint / self.get_path(int(file_id_list[idx]))
+            delete_list.append(int(fsrecord_id_list[idx]))
+        return self.delete_files(delete_list)
+
+    def delete_files(self, fsrecord_id_list: List[int]) -> int:
+        deleted_count = 0
+        for id in fsrecord_id_list:
+            file_path = self.mountpoint / self.get_path(id)
             if file_path.exists():
                 print(f"Deleting {file_path}")
                 file_path.unlink()
-        return dupolicates_count - 1
+                deleted_count += 1
+            self.delete_fsrecord(id)
+        return deleted_count
+
+    def delete_fsrecord(self, id: int) -> bool:
+        try:
+            self._exec_query(DELETE_FSRECORD, (id,), commit=True)
+        except OperationalError:
+            return False
+        return True
 
 
 def log_subdirs_info(
