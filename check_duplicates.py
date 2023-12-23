@@ -238,7 +238,7 @@ class FileDuplicates(FileManagerDatabase):
             log_subdirs_info(
                 dir_a_path, dir_b_path, dir_a_subdirs, dir_b_subdirs)
             self.duplicate_dirs[DirsPair(dir_b, dir_a)] = DirsDifference(
-                a_not_b_size, b_not_a_size, matching_size)
+                b_not_a_size, a_not_b_size, matching_size)
             end_time = clock_gettime_ns(CLOCK_MONOTONIC)
             return self.mark_as_checked(
                 dir_a, dir_b, True,
