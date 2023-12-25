@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from sqlite3 import OperationalError
 from time import CLOCK_MONOTONIC, clock_gettime_ns
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Tuple
 
 from file_database import DEFAULT_DATABASE, FileManagerDatabase
 from file_manager import get_disk_info
@@ -33,9 +33,6 @@ SELECT_DIR_FILES = ("SELECT `fsrecords`.`ROWID`, `FileId`, `ParentId`, "
                     "INNER JOIN `files` ON `files`.`ROWID` = `FileId`"
                     "WHERE `ParentId` IN (?, ?) "
                     "ORDER BY `ParentId`, `FileId`")
-SELECT_SUBDIRS = ("SELECT `ROWID`, `Name`, `ParentId` FROM `fsrecords` "
-                  "WHERE `ParentId` IN (?, ?) AND `FileId` IS NULL "
-                  "ORDER BY `ParentId`, `Name`")
 SELECT_COPIES_IN_DIR = ("SELECT *, `FileSize`*(duplicates_count-1) AS dup_size"
                         " FROM (SELECT `FileId`, `ParentId`, `FileSize`, "
                         "GROUP_CONCAT(`fsrecords`.`ROWID`) AS records, "
@@ -83,8 +80,6 @@ class FileDuplicates(FileManagerDatabase):
         self._min_size = min_size
         self.compare_count = 0
         self.checked_dirs: Dict[DirsPair, bool] = {}
-        self.empty_dirs: Set[int] = set()  # Dirs w/o files in any subdirs
-        self.non_empty_dirs: Set[int] = set()
         self.duplicate_dirs: Dict[DirsPair, DirsDifference] = {}
         self.mountpoint: Path = Path(".")
 
@@ -120,24 +115,10 @@ class FileDuplicates(FileManagerDatabase):
         self.process_profile(dir_a, dir_b, match, *profile)
         return match
 
-    def compare_subdirs(
-        self, dir_a_subdirs: List[Any], dir_b_subdirs: List[Any]
-    ) -> bool:
-        dir_a_subdirs.sort()
-        dir_b_subdirs.sort()
-        return True
-
-    def is_dir_empty(self, dir_id: int) -> bool:
-        if dir_id in self.empty_dirs:
-            return True
-        if dir_id in self.non_empty_dirs:
-            return True
-        return False
-
     def query_files(
             self, dir_a: int, dir_b: int
             ) -> Tuple[Dict[int, int], Dict[int, int]]:
-        """Queries subdirs of given pair of dirs."""
+        """Queries files of given pair of dirs."""
         a_file_size: Dict[int, int] = {}
         b_file_size: Dict[int, int] = {}
 
@@ -148,20 +129,6 @@ class FileDuplicates(FileManagerDatabase):
             else:
                 b_file_size[row[1]] = row[3]
         return a_file_size, b_file_size
-
-    def query_subdirs(
-            self, dir_a: int, dir_b: int
-            ) -> Tuple[List[FileInfo], List[FileInfo]]:
-        """Queries files of given pair of dirs."""
-        dir_a_subdirs = []
-        dir_b_subdirs = []
-        for row in self._exec_query(
-                SELECT_SUBDIRS, (dir_a, dir_b), commit=False):
-            if row[1] == dir_a:
-                dir_a_subdirs.append(row)
-            else:
-                dir_b_subdirs.append(row)
-        return dir_a_subdirs, dir_b_subdirs
 
     def compare_dirs(self, dir_a: int, dir_b: int, max_diff: int) -> bool:
         """Compares dirs by SHA1 of files in them."""
@@ -176,7 +143,6 @@ class FileDuplicates(FileManagerDatabase):
         logging.debug(
             f"comparing Dir pair {dir_a_path},{dir_b_path}"
             f" ({dir_a},{dir_b}) for max {max_diff} diff files")
-        dir_a_subdirs, dir_b_subdirs = self.query_subdirs(dir_a, dir_b)
         a_file_size, b_file_size = self.query_files(dir_a, dir_b)
         query_time = clock_gettime_ns(CLOCK_MONOTONIC)
 
@@ -191,8 +157,6 @@ class FileDuplicates(FileManagerDatabase):
         if dirs_files_matches:
             logging.info(f"Dir {dir_a_path} is matching "
                          f"{dir_b_path} with 0 differences")
-            log_subdirs_info(
-                dir_a_path, dir_b_path, dir_a_subdirs, dir_b_subdirs)
             self.duplicate_dirs[DirsPair(dir_a, dir_b)] = DirsDifference(
                 {}, {}, matching_size)
             end_time = clock_gettime_ns(CLOCK_MONOTONIC)
@@ -222,8 +186,6 @@ class FileDuplicates(FileManagerDatabase):
         if not a_not_b_size:
             logging.info(f"Files of dir {dir_a_path} contained "
                          f"in {dir_b_path}")
-            log_subdirs_info(
-                dir_a_path, dir_b_path, dir_a_subdirs, dir_b_subdirs)
             self.duplicate_dirs[DirsPair(dir_a, dir_b)] = DirsDifference(
                 a_not_b_size, b_not_a_size, matching_size)
             end_time = clock_gettime_ns(CLOCK_MONOTONIC)
@@ -235,8 +197,6 @@ class FileDuplicates(FileManagerDatabase):
         if not b_not_a_size:
             logging.info(f"Files of {dir_b_path} "
                          f"contained in {dir_a_path}")
-            log_subdirs_info(
-                dir_a_path, dir_b_path, dir_a_subdirs, dir_b_subdirs)
             self.duplicate_dirs[DirsPair(dir_b, dir_a)] = DirsDifference(
                 b_not_a_size, a_not_b_size, matching_size)
             end_time = clock_gettime_ns(CLOCK_MONOTONIC)
@@ -253,8 +213,6 @@ class FileDuplicates(FileManagerDatabase):
             logging.info(
                 f"Dir {dir_a_path} is matching "
                 f"{dir_b_path} with {diff_count} differences")
-            log_subdirs_info(
-                dir_a_path, dir_b_path, dir_a_subdirs, dir_b_subdirs)
             self.duplicate_dirs.update(result)
             end_time = clock_gettime_ns(CLOCK_MONOTONIC)
             return self.mark_as_checked(
@@ -265,8 +223,6 @@ class FileDuplicates(FileManagerDatabase):
             logging.info(f"Files of {dir_a_path} contained in "
                          f"{dir_b_path} with "
                          f"all but {len(a_not_b_size)} files")
-            log_subdirs_info(
-                dir_a_path, dir_b_path, dir_a_subdirs, dir_b_subdirs)
             self.duplicate_dirs.update(result)
             end_time = clock_gettime_ns(CLOCK_MONOTONIC)
             return self.mark_as_checked(
@@ -277,8 +233,6 @@ class FileDuplicates(FileManagerDatabase):
             logging.info(f"Files of {dir_b_path} contained in "
                          f"{dir_a_path} with "
                          f"all but {len(b_not_a_size)} files")
-            log_subdirs_info(
-                dir_a_path, dir_b_path, dir_a_subdirs, dir_b_subdirs)
             self.duplicate_dirs.update(result)
             end_time = clock_gettime_ns(CLOCK_MONOTONIC)
             return self.mark_as_checked(
@@ -413,16 +367,6 @@ class FileDuplicates(FileManagerDatabase):
         except OperationalError:
             return False
         return True
-
-
-def log_subdirs_info(
-        dir_a_path: str, dir_b_path: str,
-        dir_a_subdirs: List[Any], dir_b_subdirs: List[Any]
-) -> None:
-    if dir_a_subdirs:
-        logging.info(f"Dir {dir_a_path} have subdirs: {dir_a_subdirs}")
-    if dir_b_subdirs:
-        logging.info(f"Dir {dir_b_path} have subdirs: {dir_b_subdirs}")
 
 
 def main(argv):
