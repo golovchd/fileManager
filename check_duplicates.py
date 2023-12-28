@@ -10,6 +10,7 @@ from sqlite3 import OperationalError
 from time import CLOCK_MONOTONIC, clock_gettime_ns
 from typing import Any, Dict, List, Tuple
 
+from duplicates_cleanup import DuplicatesCleanup
 from file_database import DEFAULT_DATABASE, FileManagerDatabase
 from file_manager import get_disk_info
 from file_utils import generate_file_sha1
@@ -538,6 +539,9 @@ def main(argv):
     arg_parser.add_argument("-c", "--clenaup",
                             help="Run inteructive cleanup mode",
                             action="store_true")
+    arg_parser.add_argument("--clenaup-config",
+                            help="Config for cleanup automation",
+                            type=Path)
     arg_parser.add_argument("--hash",
                             help="Re-hash files before deletion",
                             action="store_true")
@@ -548,6 +552,8 @@ def main(argv):
     logging.basicConfig(
         format="%(asctime)s [%(levelname)s] %(message)s",
         level=logging.WARNING - 10 * (args.verbose if args.verbose < 3 else 2))
+    if args.clenaup_config:
+        DuplicatesCleanup(args.clenaup_config)
 
     with FileDuplicates(args.database, args.min_size, args.hash) as file_db:
         file_db.set_disk_by_name(args.uuid or args.label)

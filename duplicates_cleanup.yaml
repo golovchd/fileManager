@@ -1,0 +1,22 @@
+dir-commons:
+  - keep: Data/Audio
+    delete: Data/Backup
+  - keep: Data/Movies
+    delete: Data/Backup
+  - keep: Data/Music
+    delete: Data/Backup
+  - keep: Data/Photos
+    delete: Data/Backup
+  - keep: Data/Videos
+    delete: Data/Backup
+  - keep: Data/VirtualDrives
+    delete: Data/Backup
+  - keep: Data/Backup/{{ YYYY-MM-DD }}
+    delete: Data/Backup/{{ YYYY-MM-DD }}
+    condition: latest
+  - keep: Data/Backup/{{ YYYY-MM-DD }}
+    delete: Data/Backup/hdd_images/{{ YYYY-MM-DD }}
+    condition: latest
+  - keep: Data/Backup/hdd_images/{{ YYYY-MM-DD }}
+    delete: Data/Backup/{{ YYYY-MM-DD }}
+    condition: latest
