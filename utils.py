@@ -26,6 +26,7 @@ def print_table(
         aligns: Optional[List[str]] = None,
         separator: str = "|",
         space: str = " ",
+        footer: bool = False,
         ) -> None:
     column_count = len(headers)
     column_sizes = [len(header) for header in headers]
@@ -48,3 +49,5 @@ def print_table(
         print_data = [formats[i](row[indexes[i]])
                       for i in range(column_count)]
         print(format_str.format(*print_data))
+    if footer:
+        print(format_str.format(*headers))

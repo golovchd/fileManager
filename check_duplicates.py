@@ -415,7 +415,7 @@ class FileDuplicates(FileManagerDatabase):
                 ])
         # compare_table.extend(self.get_dir_only(pair, pair.DirBId))
         print_table(compare_table, [dir_a_path, "Short SHA", dir_b_path],
-                    aligns=["<", ">", "<"])
+                    aligns=["<", ">", "<"], footer=True)
         return self.dirs_cleanup_action(common_files)
 
     def get_dir_only(self, pair: DirsPair, dir_id: int) -> List[List[str]]:
