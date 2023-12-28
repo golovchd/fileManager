@@ -7,6 +7,8 @@ dir-commons:
     delete: Data/Backup
   - keep: Data/Photos
     delete: Data/Backup
+  - keep: Data/Photos
+    skip: Data/Backup/Torus
   - keep: Data/Videos
     delete: Data/Backup
   - keep: Data/VirtualDrives
