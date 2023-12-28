@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Tuple
 
 from file_database import DEFAULT_DATABASE, FileManagerDatabase
 from file_manager import get_disk_info
+from utils import print_table
 
 DEFAULT_MIN_SIZE = 1000000  # 1 MB
 
@@ -28,7 +29,7 @@ DUPLICATES_FOLDERS = ("SELECT * FROM "
                       "WHERE `FileCount` > 1 "
                       "ORDER BY `Parents` ASC, `FileCount`")
 SELECT_DIR_FILES = ("SELECT `fsrecords`.`ROWID`, `FileId`, `ParentId`, "
-                    "`FileSize` "
+                    "`FileSize`, `fsrecords`.`Name`, `files`.`SHA1` "
                     "FROM `fsrecords` "
                     "INNER JOIN `files` ON `files`.`ROWID` = `FileId`"
                     "WHERE `ParentId` IN (?, ?) "
@@ -59,9 +60,18 @@ class DirsPair:
 class FileInfo:
     FileId: int
     FileSize: int
+    FileSHA1: str
 
     def __hash__(self) -> int:
         return self.FileId
+
+
+@dataclass
+class FSRecortInfo:
+    FSRecordId: int
+    Name: str
+    ParentId: int
+    FileId: int
 
 
 @dataclass
@@ -69,6 +79,7 @@ class DirsDifference:
     files_a_not_b: Dict[int, int]
     files_b_not_a: Dict[int, int]
     matching_size: int
+    common_files: Dict[int, int]
 
 
 class FileDuplicates(FileManagerDatabase):
@@ -82,6 +93,9 @@ class FileDuplicates(FileManagerDatabase):
         self.checked_dirs: Dict[DirsPair, bool] = {}
         self.duplicate_dirs: Dict[DirsPair, DirsDifference] = {}
         self.mountpoint: Path = Path(".")
+        self.file_info: Dict[int, FileInfo] = {}
+        self.fsrecord_info: Dict[int, FSRecortInfo] = {}
+        self.dir_fsrecords: Dict[int, List[int]] = {}
 
     def set_mountpoint(self):
         """Request lsblk disk info, raises ValueError if not mounted."""
@@ -121,13 +135,20 @@ class FileDuplicates(FileManagerDatabase):
         """Queries files of given pair of dirs."""
         a_file_size: Dict[int, int] = {}
         b_file_size: Dict[int, int] = {}
+        self.dir_fsrecords[dir_a] = []
+        self.dir_fsrecords[dir_b] = []
 
         for row in self._exec_query(
                 SELECT_DIR_FILES, (dir_a, dir_b), commit=False):
+            self.file_info[row[1]] = FileInfo(row[1], row[3], row[5])
+            self.fsrecord_info[row[0]] = FSRecortInfo(
+                row[0], row[4], row[2], row[1])
             if int(row[2]) == int(dir_a):
                 a_file_size[row[1]] = row[3]
+                self.dir_fsrecords[dir_a].append(row[0])
             else:
                 b_file_size[row[1]] = row[3]
+                self.dir_fsrecords[dir_b].append(row[0])
         return a_file_size, b_file_size
 
     def compare_dirs(self, dir_a: int, dir_b: int, max_diff: int) -> bool:
@@ -146,9 +167,10 @@ class FileDuplicates(FileManagerDatabase):
         a_file_size, b_file_size = self.query_files(dir_a, dir_b)
         query_time = clock_gettime_ns(CLOCK_MONOTONIC)
 
-        matching_size = sum([
-            a_file_size[file] for file in a_file_size if file in b_file_size
-        ])
+        matching_files = {a_file_id: a_file_size[a_file_id]
+                          for a_file_id in a_file_size
+                          if a_file_id in b_file_size}
+        matching_size = sum(matching_files.values())
         size_time = clock_gettime_ns(CLOCK_MONOTONIC)
 
         dirs_files_matches: bool = (a_file_size.keys() == b_file_size.keys())
@@ -158,7 +180,7 @@ class FileDuplicates(FileManagerDatabase):
             logging.info(f"Dir {dir_a_path} is matching "
                          f"{dir_b_path} with 0 differences")
             self.duplicate_dirs[DirsPair(dir_a, dir_b)] = DirsDifference(
-                {}, {}, matching_size)
+                {}, {}, matching_size, matching_files)
             end_time = clock_gettime_ns(CLOCK_MONOTONIC)
             return self.mark_as_checked(
                 dir_a, dir_b, True,
@@ -187,7 +209,7 @@ class FileDuplicates(FileManagerDatabase):
             logging.info(f"Files of dir {dir_a_path} contained "
                          f"in {dir_b_path}")
             self.duplicate_dirs[DirsPair(dir_a, dir_b)] = DirsDifference(
-                a_not_b_size, b_not_a_size, matching_size)
+                a_not_b_size, b_not_a_size, matching_size, matching_files)
             end_time = clock_gettime_ns(CLOCK_MONOTONIC)
             return self.mark_as_checked(
                 dir_a, dir_b, True,
@@ -198,7 +220,7 @@ class FileDuplicates(FileManagerDatabase):
             logging.info(f"Files of {dir_b_path} "
                          f"contained in {dir_a_path}")
             self.duplicate_dirs[DirsPair(dir_b, dir_a)] = DirsDifference(
-                b_not_a_size, a_not_b_size, matching_size)
+                b_not_a_size, a_not_b_size, matching_size, matching_files)
             end_time = clock_gettime_ns(CLOCK_MONOTONIC)
             return self.mark_as_checked(
                 dir_a, dir_b, True,
@@ -207,7 +229,7 @@ class FileDuplicates(FileManagerDatabase):
 
         result = {
             DirsPair(dir_a, dir_b): DirsDifference(
-                a_not_b_size, b_not_a_size, matching_size)
+                a_not_b_size, b_not_a_size, matching_size, matching_files)
         }
         if diff_count <= max_diff:
             logging.info(
@@ -249,11 +271,12 @@ class FileDuplicates(FileManagerDatabase):
             [start_time, query_time, size_time, dirs_files_matches_time,
              end_time, 8, len(a_file_size), len(b_file_size)])
 
-    def sort_output_duplicate_dirs(self, max_diff: int) -> None:
+    def sort_output_duplicate_dirs(self, max_diff: int, clenaup: bool) -> None:
         sorted_duplicates = sorted(
             self.duplicate_dirs.keys(),
             key=lambda pair: self.duplicate_dirs[pair].matching_size,
             reverse=True)
+        reclaimed_size = 0
         for dir_pair in sorted_duplicates:
             if not (self.duplicate_dirs[dir_pair].files_a_not_b or
                     self.duplicate_dirs[dir_pair].files_b_not_a):
@@ -276,8 +299,12 @@ class FileDuplicates(FileManagerDatabase):
             print(f"{self.duplicate_dirs[dir_pair].matching_size} B {status}: "
                   f"'{self.get_path(dir_pair.DirAId)}' "
                   f"'{self.get_path(dir_pair.DirBId)}'")
+            if clenaup:
+                reclaimed_size += self.dirs_pair_clenaup(dir_pair)
+        if clenaup:
+            print(f"{reclaimed_size}B was reclaimed")
 
-    def search_duplicate_folders(self, max_diff: int) -> None:
+    def search_duplicate_folders(self, max_diff: int, clenaup: bool) -> None:
         start_time = clock_gettime_ns(CLOCK_MONOTONIC)
         for row in self._exec_query(DUPLICATES_FOLDERS,
                                     (self._disk_id, self._min_size),
@@ -291,7 +318,7 @@ class FileDuplicates(FileManagerDatabase):
                         continue
                     self.compare_dirs(dirs[i], dirs[j], max_diff)
         query_time = clock_gettime_ns(CLOCK_MONOTONIC)
-        self.sort_output_duplicate_dirs(max_diff)
+        self.sort_output_duplicate_dirs(max_diff, clenaup)
         sort_time = clock_gettime_ns(CLOCK_MONOTONIC)
         logging.info(f"Query time {query_time - start_time} ns, "
                      f"Sort time {sort_time - query_time}, "
@@ -321,10 +348,10 @@ class FileDuplicates(FileManagerDatabase):
                 files_counter += 1
                 print(f"{files_counter}: {self.get_path(file_record)}")
             if clenaup:
-                reclaimed_size += (
-                    self.in_folder_cleanup_action(files_list) * row[2])
-        print(f"In-folders duplicates: {reclaim_groups} groups, "
-              f"{files_to_delete} files to delete, {reclaim_size}B to reclaim")
+                reclaimed_size += self.in_folder_cleanup_action(files_list)
+        print(f"In-folders duplicates: {reclaim_groups} groups,",
+              f"{files_to_delete} files to delete, {reclaim_size}B to reclaim",
+              f"{reclaimed_size}B was reclaimed" if clenaup else "")
 
     def in_folder_cleanup_action(self, fsrecord_id_list: List[str]) -> int:
         keep_idx = -1
@@ -350,16 +377,101 @@ class FileDuplicates(FileManagerDatabase):
             delete_list.append(int(fsrecord_id_list[idx]))
         return self.delete_files(delete_list)
 
+    def dirs_pair_clenaup(self, pair: DirsPair) -> int:
+        dir_a_path = self.get_path(pair.DirAId)
+        dir_b_path = self.get_path(pair.DirBId)
+        print(f"Matching files in {dir_a_path} and {dir_b_path}:")
+        compare_table = []
+        common_files: Dict[int, DirsPair] = {}
+        # compare_table.extend(self.get_dir_only(pair, pair.DirAId))
+        for fs_record_a_id in self.dir_fsrecords[pair.DirAId]:
+            fsrecord_info = self.fsrecord_info[fs_record_a_id]
+            if fsrecord_info.FileId in self.duplicate_dirs[pair].common_files:
+                fsrecord_info_b = None
+                for fs_record_b_id in self.dir_fsrecords[pair.DirBId]:
+                    fsrecord_info_b = self.fsrecord_info[fs_record_b_id]
+                    if fsrecord_info_b.FileId == fsrecord_info.FileId:
+                        common_files[fsrecord_info.FileId] = DirsPair(
+                            fs_record_a_id, fs_record_b_id
+                        )
+                        break
+                else:
+                    raise ValueError(
+                        f"Failed to find match in dir {pair.DirBId} for"
+                        "fsrecord {fs_record_a_id} from dir {pair.DirAId}")
+
+                compare_table.append([
+                    fsrecord_info.Name,
+                    self.file_info[fsrecord_info.FileId].FileSHA1[:8],
+                    fsrecord_info_b.Name
+                ])
+        # compare_table.extend(self.get_dir_only(pair, pair.DirBId))
+        print_table(compare_table, [dir_a_path, "Short SHA", dir_b_path],
+                    aligns=["<", ">", "<"])
+        return self.dirs_cleanup_action(common_files)
+
+    def get_dir_only(self, pair: DirsPair, dir_id: int) -> List[List[str]]:
+        """Processing pair to extract files only in given."""
+        compare_table = []
+        for fs_record_id in self.dir_fsrecords[dir_id]:
+            fsrecord_info = self.fsrecord_info[fs_record_id]
+            only_dir_files = (self.duplicate_dirs[pair].files_a_not_b
+                              if dir_id == pair.DirAId else
+                              self.duplicate_dirs[pair].files_b_not_a)
+            if fsrecord_info.FileId in only_dir_files:
+                compare_table.append([
+                    fsrecord_info.Name if dir_id == pair.DirAId else "",
+                    self.file_info[fsrecord_info.FileId].FileSHA1[:8],
+                    fsrecord_info.Name if dir_id == pair.DirBId else "",
+                ])
+        return compare_table
+
+    def dirs_cleanup_action(self, common_files: Dict[int, DirsPair]) -> int:
+        action = ""
+        while action not in ["s", "l", "r"]:
+            action = input(
+                "Enter action (s-skip/l-keep left, remove right/"
+                "r-keep right, remove left) [s]: "
+            )
+            if not action:
+                action = "s"
+        if action == "s":
+            return 0
+        remove_list = []
+        for file_pair in common_files.values():
+            if action == "l":  # keep left, remove right
+                keep_id = file_pair.DirAId
+                delete_id = file_pair.DirBId
+            elif action == "r":  # keep right, remove left
+                keep_id = file_pair.DirBId
+                delete_id = file_pair.DirAId
+            else:
+                raise ValueError(f"Unexpected action {action}")
+            if not (self.mountpoint / self.get_path(keep_id)).exists():
+                logging.warning(
+                    "Failed to locate file "
+                    f"{self.fsrecord_info[keep_id].Name} in dir "
+                    f"{self.get_path(self.fsrecord_info[keep_id].ParentId)}, "
+                    "skipped deletion of "
+                    f"{self.fsrecord_info[delete_id].Name} from dir"
+                    f" {self.get_path(self.fsrecord_info[delete_id].ParentId)}"
+                )
+            else:
+                remove_list.append(delete_id)
+        return self.delete_files(remove_list)
+
     def delete_files(self, fsrecord_id_list: List[int]) -> int:
-        deleted_count = 0
+        """Returns size of reclamed space."""
+        deleted_size = 0
         for id in fsrecord_id_list:
             file_path = self.mountpoint / self.get_path(id)
             if file_path.exists():
                 print(f"Deleting {file_path}")
+                deleted_size += file_path.stat().st_size
                 file_path.unlink()
-                deleted_count += 1
+
             self.delete_fsrecord(id)
-        return deleted_count
+        return deleted_size
 
     def delete_fsrecord(self, id: int) -> bool:
         try:
@@ -410,7 +522,7 @@ def main(argv):
         if args.clenaup:
             file_db.set_mountpoint()
         file_db.search_file_copies_in_folder(args.clenaup)
-        file_db.search_duplicate_folders(args.max_diff)
+        file_db.search_duplicate_folders(args.max_diff, args.clenaup)
 
 
 if __name__ == "__main__":
