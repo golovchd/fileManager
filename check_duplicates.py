@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Tuple
 
 from file_database import DEFAULT_DATABASE, FileManagerDatabase
 from file_manager import get_disk_info
+from file_utils import generate_file_sha1
 from utils import print_table
 
 DEFAULT_MIN_SIZE = 1000000  # 1 MB
@@ -37,7 +38,7 @@ SELECT_DIR_FILES = ("SELECT `fsrecords`.`ROWID`, `FileId`, `ParentId`, "
 SELECT_COPIES_IN_DIR = ("SELECT *, `FileSize`*(duplicates_count-1) AS dup_size"
                         " FROM (SELECT `FileId`, `ParentId`, `FileSize`, "
                         "GROUP_CONCAT(`fsrecords`.`ROWID`) AS records, "
-                        "COUNT(*) AS duplicates_count "
+                        "COUNT(*) AS duplicates_count, `SHA1` "
                         "FROM `fsrecords` "
                         "INNER JOIN `files` ON `files`.`ROWID` = `FileId` "
                         "WHERE `DiskId` = ? AND `FileSize` > ? "
@@ -86,7 +87,7 @@ class FileDuplicates(FileManagerDatabase):
     """Representation of fileManager database and relevant queries."""
 
     def __init__(
-            self, db_path: Path, min_size: int):
+            self, db_path: Path, min_size: int, rehash: bool):
         super().__init__(db_path, 0)
         self._min_size = min_size
         self.compare_count = 0
@@ -96,6 +97,8 @@ class FileDuplicates(FileManagerDatabase):
         self.file_info: Dict[int, FileInfo] = {}
         self.fsrecord_info: Dict[int, FSRecortInfo] = {}
         self.dir_fsrecords: Dict[int, List[int]] = {}
+        self.rehash = rehash
+        self.checked_hashes: Dict[int, str] = {}
 
     def set_mountpoint(self):
         """Request lsblk disk info, raises ValueError if not mounted."""
@@ -335,18 +338,23 @@ class FileDuplicates(FileManagerDatabase):
         for row in self._exec_query(SELECT_COPIES_IN_DIR,
                                     (self._disk_id, self._min_size),
                                     commit=False):
-            reclaim_size += row[5]
+            self.file_info[row[0]] = FileInfo(row[0], row[2], row[5])
+            reclaim_size += row[6]
             reclaim_groups += 1
             files_to_delete += row[4] - 1
             print(
                 f"Folder {self.get_path(row[1])} have group of {row[4]} same "
-                f"by content files, size to reclaim {row[5]}B, {row[2]}B each:"
+                f"by content files, size to reclaim {row[6]}B, {row[2]}B each:"
             )
             files_counter = 0
             files_list = row[3].split(",")
             for file_record in files_list:
+                file_path = self.get_path(file_record)
+                file_name = file_path.replace(f"{self.get_path(row[1])}/", "")
+                self.fsrecord_info[file_record] = FSRecortInfo(
+                    file_record, file_name, row[1], row[0])
                 files_counter += 1
-                print(f"{files_counter}: {self.get_path(file_record)}")
+                print(f"{files_counter}: {file_path}")
             if clenaup:
                 reclaimed_size += self.in_folder_cleanup_action(files_list)
         print(f"In-folders duplicates: {reclaim_groups} groups,",
@@ -365,11 +373,11 @@ class FileDuplicates(FileManagerDatabase):
                       f"0..{duplicates_count}")
         if not keep_idx:
             return 0
-        file_path = self.mountpoint / self.get_path(
-            int(fsrecord_id_list[keep_idx - 1]))
-        if not file_path.exists():
+        keep_fsrecord_id = int(fsrecord_id_list[keep_idx - 1])
+        file_path = self.mountpoint / self.get_path(keep_fsrecord_id)
+        if not (file_path.exists() and self.check_hash(keep_fsrecord_id)):
             raise ValueError(
-                f"Selected to keep {file_path} is missing on disk.")
+                f"Selected to keep {file_path} is missing/different on disk.")
         delete_list: List[int] = []
         for idx in range(duplicates_count):
             if idx + 1 == keep_idx:
@@ -447,7 +455,8 @@ class FileDuplicates(FileManagerDatabase):
                 delete_id = file_pair.DirAId
             else:
                 raise ValueError(f"Unexpected action {action}")
-            if not (self.mountpoint / self.get_path(keep_id)).exists():
+            if not ((self.mountpoint / self.get_path(keep_id)).exists()
+                    and self.check_hash(keep_id)):
                 logging.warning(
                     "Failed to locate file "
                     f"{self.fsrecord_info[keep_id].Name} in dir "
@@ -465,13 +474,33 @@ class FileDuplicates(FileManagerDatabase):
         deleted_size = 0
         for id in fsrecord_id_list:
             file_path = self.mountpoint / self.get_path(id)
-            if file_path.exists():
+            if file_path.exists() and self.check_hash(id):
                 print(f"Deleting {file_path}")
                 deleted_size += file_path.stat().st_size
                 file_path.unlink()
 
             self.delete_fsrecord(id)
         return deleted_size
+
+    def check_hash(self, fsrecord_id: int) -> bool:
+        """Checks hash if self.rehash, otherwise returns true"""
+        if not self.rehash:
+            return True
+        disk_hash = self.get_file_hash(fsrecord_id)
+        file_info = self.file_info[self.fsrecord_info[fsrecord_id].FileId]
+        if disk_hash != file_info.FileSHA1:
+            logging.warning(
+                f"DB SHA1 of fsrecord {fsrecord_id} {file_info.FileSHA1} is "
+                f"not matching SHA1 {disk_hash} of "
+                f"{self.mountpoint / self.get_path(fsrecord_id)}")
+        return disk_hash == file_info.FileSHA1
+
+    def get_file_hash(self, fsrecord_id: int) -> str:
+        if fsrecord_id in self.checked_hashes:
+            return self.checked_hashes[fsrecord_id]
+        self.checked_hashes[fsrecord_id], _ = generate_file_sha1(
+                self.mountpoint / self.get_path(fsrecord_id))
+        return self.checked_hashes[fsrecord_id]
 
     def delete_fsrecord(self, id: int) -> bool:
         try:
@@ -509,6 +538,9 @@ def main(argv):
     arg_parser.add_argument("-c", "--clenaup",
                             help="Run inteructive cleanup mode",
                             action="store_true")
+    arg_parser.add_argument("--hash",
+                            help="Re-hash files before deletion",
+                            action="store_true")
     arg_parser.add_argument("-v", "--verbose",
                             help="Print verbose output",
                             action="count", default=0)
@@ -517,7 +549,7 @@ def main(argv):
         format="%(asctime)s [%(levelname)s] %(message)s",
         level=logging.WARNING - 10 * (args.verbose if args.verbose < 3 else 2))
 
-    with FileDuplicates(args.database, args.min_size) as file_db:
+    with FileDuplicates(args.database, args.min_size, args.hash) as file_db:
         file_db.set_disk_by_name(args.uuid or args.label)
         if args.clenaup:
             file_db.set_mountpoint()
