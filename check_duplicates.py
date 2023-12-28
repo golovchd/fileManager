@@ -10,7 +10,9 @@ from sqlite3 import OperationalError
 from time import CLOCK_MONOTONIC, clock_gettime_ns
 from typing import Any, Dict, List, Tuple
 
-from duplicates_cleanup import DuplicatesCleanup
+from duplicates_cleanup import (ALLOWED_ACTIONS, LEFT_DIR_KEEP_ACTION,
+                                RIGHT_DIR_KEEP_ACTION, SKIP_ACTION,
+                                DuplicatesCleanup)
 from file_database import DEFAULT_DATABASE, FileManagerDatabase
 from file_manager import get_disk_info
 from file_utils import generate_file_sha1
@@ -88,7 +90,8 @@ class FileDuplicates(FileManagerDatabase):
     """Representation of fileManager database and relevant queries."""
 
     def __init__(
-            self, db_path: Path, min_size: int, rehash: bool):
+            self, db_path: Path, min_size: int, rehash: bool,
+            clenaup_config: DuplicatesCleanup):
         super().__init__(db_path, 0)
         self._min_size = min_size
         self.compare_count = 0
@@ -100,6 +103,7 @@ class FileDuplicates(FileManagerDatabase):
         self.dir_fsrecords: Dict[int, List[int]] = {}
         self.rehash = rehash
         self.checked_hashes: Dict[int, str] = {}
+        self.clenaup_config = clenaup_config
 
     def set_mountpoint(self):
         """Request lsblk disk info, raises ValueError if not mounted."""
@@ -276,6 +280,7 @@ class FileDuplicates(FileManagerDatabase):
              end_time, 8, len(a_file_size), len(b_file_size)])
 
     def sort_output_duplicate_dirs(self, max_diff: int, clenaup: bool) -> None:
+        """"Sorts and prints dound duplicates, triggers cleanup if needed."""
         sorted_duplicates = sorted(
             self.duplicate_dirs.keys(),
             key=lambda pair: self.duplicate_dirs[pair].matching_size,
@@ -417,7 +422,9 @@ class FileDuplicates(FileManagerDatabase):
         # compare_table.extend(self.get_dir_only(pair, pair.DirBId))
         print_table(compare_table, [dir_a_path, "Short SHA", dir_b_path],
                     aligns=["<", ">", "<"], footer=True)
-        return self.dirs_cleanup_action(common_files)
+        default_action = self.clenaup_config.select_dir_to_keep(
+            dir_a_path, dir_b_path)
+        return self.dirs_cleanup_action(common_files, default_action)
 
     def get_dir_only(self, pair: DirsPair, dir_id: int) -> List[List[str]]:
         """Processing pair to extract files only in given."""
@@ -435,23 +442,26 @@ class FileDuplicates(FileManagerDatabase):
                 ])
         return compare_table
 
-    def dirs_cleanup_action(self, common_files: Dict[int, DirsPair]) -> int:
+    def dirs_cleanup_action(self, common_files: Dict[int, DirsPair],
+                            default_action: str) -> int:
         action = ""
-        while action not in ["s", "l", "r"]:
+        while action not in ALLOWED_ACTIONS:
             action = input(
-                "Enter action (s-skip/l-keep left, remove right/"
-                "r-keep right, remove left) [s]: "
+                f"Enter action ({SKIP_ACTION}-skip/"
+                f"{LEFT_DIR_KEEP_ACTION}-keep left, remove right/"
+                f"{RIGHT_DIR_KEEP_ACTION}-keep right, remove left) "
+                f"[{default_action}]: "
             )
             if not action:
-                action = "s"
-        if action == "s":
+                action = default_action
+        if action == SKIP_ACTION:
             return 0
         remove_list = []
         for file_pair in common_files.values():
-            if action == "l":  # keep left, remove right
+            if action == LEFT_DIR_KEEP_ACTION:  # keep left, remove right
                 keep_id = file_pair.DirAId
                 delete_id = file_pair.DirBId
-            elif action == "r":  # keep right, remove left
+            elif action == RIGHT_DIR_KEEP_ACTION:  # keep right, remove left
                 keep_id = file_pair.DirBId
                 delete_id = file_pair.DirAId
             else:
@@ -552,10 +562,11 @@ def main(argv):
     logging.basicConfig(
         format="%(asctime)s [%(levelname)s] %(message)s",
         level=logging.WARNING - 10 * (args.verbose if args.verbose < 3 else 2))
-    if args.clenaup_config:
-        DuplicatesCleanup(args.clenaup_config)
 
-    with FileDuplicates(args.database, args.min_size, args.hash) as file_db:
+    clenaup_config = DuplicatesCleanup(args.clenaup_config)
+    with FileDuplicates(
+            args.database, args.min_size, args.hash, clenaup_config
+            ) as file_db:
         file_db.set_disk_by_name(args.uuid or args.label)
         if args.clenaup:
             file_db.set_mountpoint()
