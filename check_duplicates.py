@@ -488,7 +488,8 @@ class FileDuplicates(FileManagerDatabase):
         for id in fsrecord_id_list:
             file_path = self.mountpoint / self.get_path(id)
             if file_path.exists() and self.check_hash(id):
-                print(f"Deleting {file_path}")
+                print(f"Deleting {file_path}",
+                      "dry-run" if self.dry_run else "")
                 deleted_size += file_path.stat().st_size
                 if not self.dry_run:
                     file_path.unlink()
