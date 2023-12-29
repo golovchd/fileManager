@@ -24,3 +24,7 @@ dir-commons:
   - keep: ^Data/Backup/hdd_images/(?P<date>\d{4}-\d{2}-\d{2})
     delete: ^Data/Backup/(?P<date>\d{4}-\d{2}-\d{2})
     condition: latest
+  - keep: ^Data/Photos
+    delete: ^Data/Photos/! To Process/!!_conv
+  - keep: ^Data/Videos
+    delete: ^Data/Videos/! To Process/!!_conv
