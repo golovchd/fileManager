@@ -91,7 +91,7 @@ class FileDuplicates(FileManagerDatabase):
 
     def __init__(
             self, db_path: Path, min_size: int, rehash: bool,
-            clenaup_config: DuplicatesCleanup):
+            cleanup_config: DuplicatesCleanup, cleanup: bool, dry_run: bool):
         super().__init__(db_path, 0)
         self._min_size = min_size
         self.compare_count = 0
@@ -103,7 +103,9 @@ class FileDuplicates(FileManagerDatabase):
         self.dir_fsrecords: Dict[int, List[int]] = {}
         self.rehash = rehash
         self.checked_hashes: Dict[int, str] = {}
-        self.clenaup_config = clenaup_config
+        self.cleanup_config = cleanup_config
+        self.cleanup = cleanup
+        self.dry_run = dry_run
 
     def set_mountpoint(self):
         """Request lsblk disk info, raises ValueError if not mounted."""
@@ -279,7 +281,7 @@ class FileDuplicates(FileManagerDatabase):
             [start_time, query_time, size_time, dirs_files_matches_time,
              end_time, 8, len(a_file_size), len(b_file_size)])
 
-    def sort_output_duplicate_dirs(self, max_diff: int, clenaup: bool) -> None:
+    def sort_output_duplicate_dirs(self, max_diff: int) -> None:
         """"Sorts and prints dound duplicates, triggers cleanup if needed."""
         sorted_duplicates = sorted(
             self.duplicate_dirs.keys(),
@@ -308,12 +310,12 @@ class FileDuplicates(FileManagerDatabase):
             print(f"{self.duplicate_dirs[dir_pair].matching_size} B {status}: "
                   f"'{self.get_path(dir_pair.DirAId)}' "
                   f"'{self.get_path(dir_pair.DirBId)}'")
-            if clenaup:
-                reclaimed_size += self.dirs_pair_clenaup(dir_pair)
-        if clenaup:
+            if self.cleanup:
+                reclaimed_size += self.dirs_pair_cleanup(dir_pair)
+        if self.cleanup:
             print(f"{reclaimed_size}B was reclaimed")
 
-    def search_duplicate_folders(self, max_diff: int, clenaup: bool) -> None:
+    def search_duplicate_folders(self, max_diff: int) -> None:
         start_time = clock_gettime_ns(CLOCK_MONOTONIC)
         for row in self._exec_query(DUPLICATES_FOLDERS,
                                     (self._disk_id, self._min_size),
@@ -327,7 +329,7 @@ class FileDuplicates(FileManagerDatabase):
                         continue
                     self.compare_dirs(dirs[i], dirs[j], max_diff)
         query_time = clock_gettime_ns(CLOCK_MONOTONIC)
-        self.sort_output_duplicate_dirs(max_diff, clenaup)
+        self.sort_output_duplicate_dirs(max_diff)
         sort_time = clock_gettime_ns(CLOCK_MONOTONIC)
         logging.info(f"Query time {query_time - start_time} ns, "
                      f"Sort time {sort_time - query_time}, "
@@ -336,7 +338,7 @@ class FileDuplicates(FileManagerDatabase):
                      f"duplicate_dirs_count={len(self.duplicate_dirs)}, "
                      )
 
-    def search_file_copies_in_folder(self, clenaup: bool) -> None:
+    def search_file_copies_in_folder(self) -> None:
         reclaim_size = 0
         reclaimed_size = 0
         reclaim_groups = 0
@@ -361,11 +363,11 @@ class FileDuplicates(FileManagerDatabase):
                     file_record, file_name, row[1], row[0])
                 files_counter += 1
                 print(f"{files_counter}: {file_path}")
-            if clenaup:
+            if self.cleanup:
                 reclaimed_size += self.in_folder_cleanup_action(files_list)
         print(f"In-folders duplicates: {reclaim_groups} groups,",
               f"{files_to_delete} files to delete, {reclaim_size}B to reclaim",
-              f"{reclaimed_size}B was reclaimed" if clenaup else "")
+              f"{reclaimed_size}B was reclaimed" if self.cleanup else "")
 
     def in_folder_cleanup_action(self, fsrecord_id_list: List[str]) -> int:
         keep_idx = -1
@@ -391,7 +393,7 @@ class FileDuplicates(FileManagerDatabase):
             delete_list.append(int(fsrecord_id_list[idx]))
         return self.delete_files(delete_list)
 
-    def dirs_pair_clenaup(self, pair: DirsPair) -> int:
+    def dirs_pair_cleanup(self, pair: DirsPair) -> int:
         dir_a_path = self.get_path(pair.DirAId)
         dir_b_path = self.get_path(pair.DirBId)
         print(f"Matching files in {dir_a_path} and {dir_b_path}:")
@@ -422,7 +424,7 @@ class FileDuplicates(FileManagerDatabase):
         # compare_table.extend(self.get_dir_only(pair, pair.DirBId))
         print_table(compare_table, [dir_a_path, "Short SHA", dir_b_path],
                     aligns=["<", ">", "<"], footer=True)
-        default_action = self.clenaup_config.select_dir_to_keep(
+        default_action = self.cleanup_config.select_dir_to_keep(
             dir_a_path, dir_b_path)
         return self.dirs_cleanup_action(common_files, default_action)
 
@@ -488,9 +490,11 @@ class FileDuplicates(FileManagerDatabase):
             if file_path.exists() and self.check_hash(id):
                 print(f"Deleting {file_path}")
                 deleted_size += file_path.stat().st_size
-                file_path.unlink()
+                if not self.dry_run:
+                    file_path.unlink()
 
-            self.delete_fsrecord(id)
+            if not self.dry_run:
+                self.delete_fsrecord(id)
         return deleted_size
 
     def check_hash(self, fsrecord_id: int) -> bool:
@@ -546,14 +550,17 @@ def main(argv):
         type=int,
         help="Minimum size of the file to check duplicate.",
         default=DEFAULT_MIN_SIZE)
-    arg_parser.add_argument("-c", "--clenaup",
+    arg_parser.add_argument("-c", "--cleanup",
                             help="Run inteructive cleanup mode",
                             action="store_true")
-    arg_parser.add_argument("--clenaup-config",
+    arg_parser.add_argument("--cleanup-config",
                             help="Config for cleanup automation",
                             type=Path)
     arg_parser.add_argument("--hash",
                             help="Re-hash files before deletion",
+                            action="store_true")
+    arg_parser.add_argument("--dry-run",
+                            help="Do not delete duplicates, run all checks",
                             action="store_true")
     arg_parser.add_argument("-v", "--verbose",
                             help="Print verbose output",
@@ -563,15 +570,16 @@ def main(argv):
         format="%(asctime)s [%(levelname)s] %(message)s",
         level=logging.WARNING - 10 * (args.verbose if args.verbose < 3 else 2))
 
-    clenaup_config = DuplicatesCleanup(args.clenaup_config)
+    cleanup_config = DuplicatesCleanup(args.cleanup_config)
     with FileDuplicates(
-            args.database, args.min_size, args.hash, clenaup_config
+            args.database, args.min_size, args.hash, cleanup_config,
+            args.cleanup, args.dry_run
             ) as file_db:
         file_db.set_disk_by_name(args.uuid or args.label)
-        if args.clenaup:
+        if args.cleanup:
             file_db.set_mountpoint()
-        file_db.search_file_copies_in_folder(args.clenaup)
-        file_db.search_duplicate_folders(args.max_diff, args.clenaup)
+        file_db.search_file_copies_in_folder()
+        file_db.search_duplicate_folders(args.max_diff)
 
 
 if __name__ == "__main__":
