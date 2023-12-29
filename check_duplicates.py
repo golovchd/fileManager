@@ -374,7 +374,9 @@ class FileDuplicates(FileManagerDatabase):
         duplicates_count = len(fsrecord_id_list)
         while keep_idx < 0 or keep_idx > duplicates_count:
             try:
-                value = input("Select file to keep, enter 0 to skip clenup: ")
+                value = input("Select file to keep, 0 to skip clenup: [0]")
+                if value == "":
+                    return 0
                 keep_idx = int(value)
             except ValueError:
                 print(f"{value} is not a correct index, please enter number "
