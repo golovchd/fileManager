@@ -13,6 +13,8 @@ dir-commons:
     delete: ^Data/Backup
   - keep: ^Data/VirtualDrives
     delete: ^Data/Backup
+  - keep: ^Data/Work
+    delete: ^Data/Backup
   - keep: ^Data/Backup/(?P<date>\d{4}-\d{2}-\d{2})
     delete: ^Data/Backup/(?P<date>\d{4}-\d{2}-\d{2})
     condition: latest
