@@ -99,11 +99,9 @@ class DuplicatesCleanup:
                            or self.check_conditional_rule(rule, dir_a, dir_b))
             if rule_result:
                 matched_rules.append(MatchedRule(rule, rule_result))
-        print(matched_rules)
         if not matched_rules:
             return SKIP_ACTION
         matched_action = matched_rules[0].action
-        print(f"matched_action={matched_action}")
         for matched in matched_rules:
             if matched.action != matched_action:
                 return SKIP_ACTION
