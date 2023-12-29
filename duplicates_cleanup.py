@@ -2,12 +2,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List
 
+from regex import match
 from yaml import Loader, load
 
 DIR_CLEANUP_RULES = "dir-commons"
 KEEP_PREFIX = "keep"
 DELETE_PREFIX = "delete"
 SKIP_PREFIX = "skip"
+CONDITION = "condition"
 LEFT_DIR_KEEP_ACTION = "l"
 RIGHT_DIR_KEEP_ACTION = "r"
 SKIP_ACTION = "s"
@@ -29,25 +31,27 @@ class DuplicatesCleanup:
 
     def check_rule_basic(self, rule: Dict[str, str], dir_a: str, dir_b: str
                          ) -> str:
-        if not (KEEP_PREFIX in rule and DELETE_PREFIX in rule):
+        if not (KEEP_PREFIX in rule and DELETE_PREFIX in rule and
+                CONDITION not in rule):
             return ""
-        if (dir_a.startswith(rule[KEEP_PREFIX])
-                and dir_b.startswith(rule[DELETE_PREFIX])):
+        if (match(rule[KEEP_PREFIX], dir_a)
+                and match(rule[DELETE_PREFIX], dir_b)):
             return LEFT_DIR_KEEP_ACTION
-        if (dir_b.startswith(rule[KEEP_PREFIX])
-                and dir_a.startswith(rule[DELETE_PREFIX])):
+        if (match(rule[KEEP_PREFIX], dir_b)
+                and match(rule[DELETE_PREFIX], dir_a)):
             return RIGHT_DIR_KEEP_ACTION
         return ""
 
     def check_skip_rule(self, rule: Dict[str, str], dir_a: str, dir_b: str
                         ) -> str:
-        if not (KEEP_PREFIX in rule and SKIP_PREFIX in rule):
+        if not (KEEP_PREFIX in rule and SKIP_PREFIX in rule and
+                CONDITION not in rule):
             return ""
-        if (dir_a.startswith(rule[KEEP_PREFIX])
-                and dir_b.startswith(rule[SKIP_PREFIX])):
+        if (match(rule[KEEP_PREFIX], dir_a)
+                and match(rule[SKIP_PREFIX], dir_b)):
             return SKIP_ACTION
-        if (dir_b.startswith(rule[KEEP_PREFIX])
-                and dir_a.startswith(rule[SKIP_PREFIX])):
+        if (match(rule[KEEP_PREFIX], dir_b)
+                and match(rule[SKIP_PREFIX], dir_a)):
             return SKIP_ACTION
         return ""
 

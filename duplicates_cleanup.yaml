@@ -1,24 +1,24 @@
 dir-commons:
-  - keep: Data/Audio
-    delete: Data/Backup
-  - keep: Data/Movies
-    delete: Data/Backup
-  - keep: Data/Music
-    delete: Data/Backup
-  - keep: Data/Photos
-    delete: Data/Backup
-  - keep: Data/Photos
-    skip: Data/Backup/Torus
-  - keep: Data/Videos
-    delete: Data/Backup
-  - keep: Data/VirtualDrives
-    delete: Data/Backup
-  - keep: Data/Backup/{{ YYYY-MM-DD }}
-    delete: Data/Backup/{{ YYYY-MM-DD }}
+  - keep: ^Data/Audio
+    delete: ^Data/Backup
+  - keep: ^Data/Movies
+    delete: ^Data/Backup
+  - keep: ^Data/Music
+    delete: ^Data/Backup
+  - keep: ^Data/Photos
+    delete: ^Data/Backup
+  - keep: ^Data/Photos
+    skip: ^Data/Backup/Torus
+  - keep: ^Data/Videos
+    delete: ^Data/Backup
+  - keep: ^Data/VirtualDrives
+    delete: ^Data/Backup
+  - keep: ^Data/Backup/(?P<name>\d{4}-\d{2}-\d{2})
+    delete: ^Data/Backup/(?P<name>\d{4}-\d{2}-\d{2})
     condition: latest
-  - keep: Data/Backup/{{ YYYY-MM-DD }}
-    delete: Data/Backup/hdd_images/{{ YYYY-MM-DD }}
+  - keep: ^Data/Backup/(?P<name>\d{4}-\d{2}-\d{2})}
+    delete: ^Data/Backup/hdd_images/(?P<name>\d{4}-\d{2}-\d{2})
     condition: latest
-  - keep: Data/Backup/hdd_images/{{ YYYY-MM-DD }}
-    delete: Data/Backup/{{ YYYY-MM-DD }}
+  - keep: ^Data/Backup/hdd_images/(?P<name>\d{4}-\d{2}-\d{2})
+    delete: ^Data/Backup/(?P<name>\d{4}-\d{2}-\d{2})
     condition: latest
