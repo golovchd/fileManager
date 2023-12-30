@@ -11,6 +11,8 @@ dir-commons:
     skip: ^Data/Backup/Torus
   - keep: ^Data/Videos
     delete: ^Data/Backup
+  - keep: ^Data/Videos
+    delete: ^Data/Photos
   - keep: ^Data/VirtualDrives
     delete: ^Data/Backup
   - keep: ^Data/Work
