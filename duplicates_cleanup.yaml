@@ -30,3 +30,7 @@ dir-commons:
     delete: ^Data/Photos/! To Process/!!_conv
   - keep: ^Data/Videos
     delete: ^Data/Videos/! To Process/!!_conv
+  - keep: ^Data/
+    delete: ^[^/]+/Data/
+  - keep: ^[^/]+/Data/((?!Backup).)*/
+    skip: ^Data/Backup/
