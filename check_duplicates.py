@@ -91,7 +91,9 @@ class FileDuplicates(FileManagerDatabase):
 
     def __init__(
             self, db_path: Path, min_size: int, rehash: bool,
-            cleanup_config: DuplicatesCleanup, cleanup: bool, dry_run: bool):
+            cleanup_config: DuplicatesCleanup, cleanup: bool, dry_run: bool,
+            auto_execute_default: bool
+            ):
         super().__init__(db_path, 0)
         self._min_size = min_size
         self.compare_count = 0
@@ -106,6 +108,7 @@ class FileDuplicates(FileManagerDatabase):
         self.cleanup_config = cleanup_config
         self.cleanup = cleanup
         self.dry_run = dry_run
+        self.auto_execute_default = auto_execute_default
 
     def set_mountpoint(self):
         """Request lsblk disk info, raises ValueError if not mounted."""
@@ -372,6 +375,7 @@ class FileDuplicates(FileManagerDatabase):
     def in_folder_cleanup_action(self, fsrecord_id_list: List[str]) -> int:
         keep_idx = -1
         duplicates_count = len(fsrecord_id_list)
+        keep_idx = 0 if self.auto_execute_default else -1
         while keep_idx < 0 or keep_idx > duplicates_count:
             try:
                 value = input("Select file to keep, 0 to skip clenup: [0]")
@@ -448,7 +452,7 @@ class FileDuplicates(FileManagerDatabase):
 
     def dirs_cleanup_action(self, common_files: Dict[int, DirsPair],
                             default_action: str) -> int:
-        action = ""
+        action = default_action if self.auto_execute_default else ""
         while action not in ALLOWED_ACTIONS:
             action = input(
                 f"Enter action ({SKIP_ACTION}-skip/"
@@ -559,6 +563,9 @@ def main(argv):
     arg_parser.add_argument("--cleanup-config",
                             help="Config for cleanup automation",
                             type=Path)
+    arg_parser.add_argument("-y", "--yes",
+                            help="Accept all default actions",
+                            action="store_true")
     arg_parser.add_argument("--hash",
                             help="Re-hash files before deletion",
                             action="store_true")
@@ -576,7 +583,7 @@ def main(argv):
     cleanup_config = DuplicatesCleanup(args.cleanup_config)
     with FileDuplicates(
             args.database, args.min_size, args.hash, cleanup_config,
-            args.cleanup, args.dry_run
+            args.cleanup, args.dry_run, args.yes
             ) as file_db:
         file_db.set_disk_by_name(args.uuid or args.label)
         if args.cleanup:
