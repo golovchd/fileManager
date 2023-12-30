@@ -358,16 +358,17 @@ class FileDuplicates(FileManagerDatabase):
                 f"by content files, size to reclaim {row[6]}B, {row[2]}B each:"
             )
             files_counter = 0
-            files_list = row[3].split(",")
-            for file_record in files_list:
-                file_path = self.get_path(file_record)
+            fsrecords_list = row[3].split(",")
+            for fs_record_id in fsrecords_list:
+                fs_record_id = int(fs_record_id)
+                file_path = self.get_path(fs_record_id)
                 file_name = file_path.replace(f"{self.get_path(row[1])}/", "")
-                self.fsrecord_info[file_record] = FSRecortInfo(
-                    file_record, file_name, row[1], row[0])
+                self.fsrecord_info[fs_record_id] = FSRecortInfo(
+                    fs_record_id, file_name, row[1], row[0])
                 files_counter += 1
                 print(f"{files_counter}: {file_path}")
             if self.cleanup:
-                reclaimed_size += self.in_folder_cleanup_action(files_list)
+                reclaimed_size += self.in_folder_cleanup_action(fsrecords_list)
         print(f"In-folders duplicates: {reclaim_groups} groups,",
               f"{files_to_delete} files to delete, {reclaim_size}B to reclaim",
               f"{reclaimed_size}B was reclaimed" if self.cleanup else "")
