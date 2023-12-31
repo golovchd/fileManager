@@ -28,8 +28,12 @@ dir-commons:
     condition: latest
   - keep: ^Data/Photos
     delete: ^Data/Photos/! To Process/!!_conv
+  - keep: ^Data/Photos
+    delete: ^Data/Photos/! To Process/!!/.+
   - keep: ^Data/Videos
     delete: ^Data/Videos/! To Process/!!_conv
+  - keep: ^Data/Videos
+    delete: ^Data/Videos/! To Process/!!/.+
   - keep: ^Data/
     delete: ^[^/]+/Data/
   - keep: ^[^/]+/Data/((?!Backup).)*/
