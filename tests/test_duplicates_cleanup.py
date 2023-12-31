@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from typing import Dict
 
 import pytest
 
@@ -69,3 +70,41 @@ def test_multiple_rules(dir_a: str, dir_b: str, action: str):
 def test_no_config(dir_a: str, dir_b: str):
     config = DuplicatesCleanup(SCRIPT_DIR.parent / "missing.yaml")
     assert config.select_dir_to_keep(dir_a, dir_b) == SKIP_ACTION
+
+
+@pytest.mark.parametrize(
+    "names, index",
+    [
+        ({1: "aaa", 2: "bbb"}, 0),
+        ({1: "aaa.jpg", 2: "bbb.jpg"}, 0),
+        ({1: "aaa.jpg", 2: "aaa-1.jpg", 3: "aaa-2.jpg", 4: "aaa-3.jpg"}, 1),
+        ({1: "aaa-1.jpg", 2: "aaa.jpg", 3: "aaa-2.jpg", 4: "aaa-3.jpg"}, 2),
+        ({1: "aaa-1.jpg", 2: "aaa-2.jpg", 3: "aaa-3.jpg", 4: "aaa.jpg"}, 4),
+        ({1: "aaa.jpg", 2: "aaa(1).jpg", 3: "aaa(2).jpg", 4: "aaa(3).jpg"}, 1),
+        ({1: "aaa(1).jpg", 2: "aaa.jpg", 3: "aaa(2).jpg", 4: "aaa(3).jpg"}, 2),
+        ({1: "aaa(1).jpg", 2: "aaa(2).jpg", 3: "aaa(3).jpg", 4: "aaa.jpg"}, 4),
+        ({1: "123cam.jpg", 2: "123.jpg"}, 1),
+        ({1: "123cam.jpg", 2: "321.jpg"}, 0),
+        ({1: "aaa.jpg.bak", 2: "bbb.jpg"}, 0),
+        ({1: "bbb.jpg.bak", 2: "bbb.jpg"}, 2),
+        ({1: "bbb.jpg", 2: "bbb.jpg.bak"}, 1),
+        ({1: "bbb.bak", 2: "bbb.jpg"}, 2),
+        ({1: "bbb.jpg", 2: "bbb.bak"}, 1),
+        ({1: "aaa.jpg.tmp", 2: "bbb.jpg"}, 0),
+        ({1: "bbb.jpg.tmp", 2: "bbb.jpg"}, 2),
+        ({1: "bbb.jpg", 2: "bbb.jpg.tmp"}, 1),
+        ({1: "bbb.tmp", 2: "bbb.jpg"}, 2),
+        ({1: "bbb.jpg", 2: "bbb.tmp"}, 1),
+        ({1: "bbb.jpg", 2: "bbb.jpg.xyz"}, 1),
+        ({1: ".com.google.Chrome.C4hlwU", 2: "abc.pdf"}, 2),
+    ],
+)
+def test_select_file_to_keep(names: Dict[int, str], index: int):
+    config = DuplicatesCleanup(TEST_CONFIG)
+    assert config.select_file_to_keep(names) == index
+
+
+def test_bad_files_dict():
+    config = DuplicatesCleanup(TEST_CONFIG)
+    with pytest.raises(IndexError):
+        config.select_file_to_keep({0: "dummy"})

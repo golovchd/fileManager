@@ -6,6 +6,7 @@ from regex import match
 from yaml import Loader, load
 
 DIR_CLEANUP_RULES = "dir-commons"
+FILE_CLEANUP_RULES = "same-files"
 KEEP_PREFIX = "keep"
 DELETE_PREFIX = "delete"
 SKIP_PREFIX = "skip"
@@ -106,3 +107,43 @@ class DuplicatesCleanup:
             if matched.action != matched_action:
                 return SKIP_ACTION
         return matched_action
+
+    def select_file_to_keep(self, names: Dict[int, str]) -> int:
+        for rule in self.config.get(FILE_CLEANUP_RULES, []):
+            keep_index = 0
+            delete_indexes: List[int] = []
+            group_values = {group_name: "" for group_name in rule["groups"]}
+            for index, name in names.items():
+                if not index:
+                    raise IndexError(
+                        "Names index could not be 0 for select_file_to_keep")
+                keep_match = match(rule[KEEP_PREFIX], name)
+                delete_match = match(rule[DELETE_PREFIX], name)
+                if not (keep_match or delete_match):
+                    break  # none of rules match
+                if keep_index and keep_match and not delete_match:
+                    break  # more than one matched rule
+                for group_name in rule["groups"]:
+                    matched_value = (keep_match.group(group_name)
+                                     if keep_match and not delete_match
+                                     else delete_match.group(group_name))
+                    if not group_values[group_name]:
+                        group_values[group_name] = matched_value
+                    else:
+                        if group_values[group_name] != matched_value:
+                            keep_index = 0  # Reset to skip if rule mismatched
+                            delete_indexes = []
+                            break
+                else:  # No groups mismatch
+                    if keep_match and not delete_match:
+                        keep_index = index
+                    else:
+                        delete_indexes.append(index)
+                    continue  # Check next file
+                break  # Stop testing rule that had mismatched group
+            for idx in names:
+                if idx != keep_index and idx not in delete_indexes:
+                    break  # Each index should match either keep or delete rule
+            else:
+                return keep_index
+        return 0

@@ -359,6 +359,7 @@ class FileDuplicates(FileManagerDatabase):
             )
             files_counter = 0
             fsrecords_list = row[3].split(",")
+            duplicates_names = {}
             for fs_record_id in fsrecords_list:
                 fs_record_id = int(fs_record_id)
                 file_path = self.get_path(fs_record_id)
@@ -367,26 +368,33 @@ class FileDuplicates(FileManagerDatabase):
                     fs_record_id, file_name, row[1], row[0])
                 files_counter += 1
                 print(f"{files_counter}: {file_path}")
+                duplicates_names[files_counter] = file_name
             if self.cleanup:
-                reclaimed_size += self.in_folder_cleanup_action(fsrecords_list)
+                default_idx = self.cleanup_config.select_file_to_keep(
+                    duplicates_names)
+                reclaimed_size += self.in_folder_cleanup_action(
+                    fsrecords_list, default_idx)
         print(f"In-folders duplicates: {reclaim_groups} groups,",
               f"{files_to_delete} files to delete, {reclaim_size}B to reclaim",
               f"{reclaimed_size}B was reclaimed" if self.cleanup else "")
 
-    def in_folder_cleanup_action(self, fsrecord_id_list: List[str]) -> int:
+    def in_folder_cleanup_action(
+            self, fsrecord_id_list: List[str], default_idx: int) -> int:
         keep_idx = -1
         duplicates_count = len(fsrecord_id_list)
-        keep_idx = 0 if self.auto_execute_default else -1
+        keep_idx = default_idx if self.auto_execute_default else -1
         while keep_idx < 0 or keep_idx > duplicates_count:
             try:
-                value = input("Select file to keep, 0 to skip clenup: [0]")
+                value = input("Select file to keep, 0 to skip cleanup: "
+                              f"[{default_idx}]")
                 if value == "":
-                    return 0
-                keep_idx = int(value)
+                    keep_idx = default_idx
+                else:
+                    keep_idx = int(value)
             except ValueError:
                 print(f"{value} is not a correct index, please enter number "
                       f"0..{duplicates_count}")
-        if not keep_idx:
+        if keep_idx == 0:
             return 0
         keep_fsrecord_id = int(fsrecord_id_list[keep_idx - 1])
         file_path = self.mountpoint / self.get_path(keep_fsrecord_id)

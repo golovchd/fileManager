@@ -34,3 +34,31 @@ dir-commons:
     delete: ^[^/]+/Data/
   - keep: ^[^/]+/Data/((?!Backup).)*/
     skip: ^Data/Backup/
+same-files:
+  - keep: ^(?P<name>.+)cam\.(?P<ext>.+)$
+    delete: ^(?P<name>((?!cam).)+)\.(?P<ext>.+)$
+    groups: [name, ext]
+  - keep: ^(?P<name>.+)\.(?P<ext>.+)$
+    delete: ^(?P<name>.+)\.(?P<ext>.+)\.bak$
+    groups: [name, ext]
+  - keep: ^(?P<name>.+)\.(?P<ext>.+)$
+    delete: ^(?P<name>.+)\.bak$
+    groups: [name]
+  - keep: ^(?P<name>.+)\.(?P<ext>.+)$
+    delete: ^(?P<name>.+)\.tmp$
+    groups: [name]
+  - keep: ^(?P<name>.+)\.(?P<ext>.+)$
+    delete: ^(?P<name>.+)\.(?P<ext>.+)\.tmp$
+    groups: [name, ext]
+  - keep: ^(?P<name>.+)\.(?P<ext>.+)$
+    delete: ^(?P<name>.+)\.(?P<ext>.+)\..+$
+    groups: [name, ext]
+  - keep: ^(?P<name>.+)\.(?P<ext>.+)$
+    delete: ^(?P<name>.+)-\d+\.(?P<ext>.+)$
+    groups: [name, ext]
+  - keep: ^(?P<name>.+)\.(?P<ext>.+)$
+    delete: ^(?P<name>.+)\(\d+\)\.(?P<ext>.+)$
+    groups: [name, ext]
+  - keep: ^((?!\.com\.google\.Chrome\.).)+$
+    delete: ^\.com\.google\.Chrome\..+$
+    groups: []
