@@ -1,3 +1,4 @@
+import logging
 import sys
 from pathlib import Path
 from typing import Dict
@@ -17,12 +18,6 @@ TEST_CONFIG = SCRIPT_DIR.parent / "duplicates_cleanup.yaml"
 @pytest.mark.parametrize(
     "dir_a, dir_b, action",
     [
-        ("Data/Backup/Torus/2015-12-03 DropBox/Torus Management/results",
-         "Data/Photos/! To Process/2014/01/2014-01-14",
-         SKIP_ACTION),
-        ("Data/Photos/! To Process/2014/01/2014-01-14",
-         "Data/Backup/Torus/2015-12-03 DropBox/Torus Management/results",
-         SKIP_ACTION),
         ("Data/Backup/1GB_1",
          "Data/Photos/! To Process/2014/01/2014-01-14",
          RIGHT_DIR_KEEP_ACTION),
@@ -38,6 +33,15 @@ TEST_CONFIG = SCRIPT_DIR.parent / "duplicates_cleanup.yaml"
         ("Data/Photos/! To Process/2014/01/2014-01-14",
          "Data/Backup/1GB_1",
          LEFT_DIR_KEEP_ACTION),
+        ("Data/Photos/! To Process/2014/01/2014-01-14",
+         "Data/Backup/test DropBox",
+         SKIP_ACTION),
+        ("Data/Photos/! To Process/2014/01/2014-01-14",
+         "Data/Backup/test DropBox/tmp",
+         SKIP_ACTION),
+        ("Data/Photos/! To Process/2014/01/2014-01-14",
+         "Data/Backup/DropBox/tmp",
+         SKIP_ACTION),
         ("Data/Backup/2014-01-14 left",
          "Data/Backup/2014-01-15 right",
          RIGHT_DIR_KEEP_ACTION),
@@ -56,9 +60,31 @@ TEST_CONFIG = SCRIPT_DIR.parent / "duplicates_cleanup.yaml"
         ("tmp/Data/Photos/! To Process/2014/01/2014-01-14",
          "Data/Backup/1GB_1",
          SKIP_ACTION),
+        ("Data/Backup/1GB_1",
+         "tmp/Data/Photos/! To Process/2014/01/2014-01-14",
+         SKIP_ACTION),
+        ("Data/Photos/! To DVD/",
+         "Data/Photos/! To Process/",
+         LEFT_DIR_KEEP_ACTION),
+        ("Data/Photos/! To Process/2014/2014-01-14",
+         "Data/Photos/! To Process/2014",
+         LEFT_DIR_KEEP_ACTION),
+        ("Data/Photos/! To DVD/2011/2011-11-05-2/[Originals]",
+         "Data/Photos/Family/Tetiana Skurchynska/[Originals]",
+         LEFT_DIR_KEEP_ACTION),
+        ("Data/Photos/! To Process/2011/2011-11-05-2/[Originals]",
+         "Data/Photos/Family/Tetiana Skurchynska/[Originals]",
+         LEFT_DIR_KEEP_ACTION),
+        ("Data/Photos/! To Process/2011/2011-11-05-2/[Originals]",
+         "Data/Photos/! To DVD/2011/2011-11-05-2/[Originals]",
+         SKIP_ACTION),
+        ("Data/Videos/! To Process/2014/2014-01-14",
+         "Data/Videos/! To Process/2014",
+         LEFT_DIR_KEEP_ACTION),
     ],
 )
-def test_multiple_rules(dir_a: str, dir_b: str, action: str):
+def test_multiple_rules(caplog, dir_a: str, dir_b: str, action: str):
+    caplog.set_level(logging.DEBUG)
     config = DuplicatesCleanup(TEST_CONFIG)
     assert config.select_dir_to_keep(dir_a, dir_b) == action
 
@@ -66,8 +92,6 @@ def test_multiple_rules(dir_a: str, dir_b: str, action: str):
 @pytest.mark.parametrize(
     "dir_a, dir_b",
     [
-        ("Data/Backup/Torus/2015-12-03 DropBox/Torus Management/results",
-         "Data/Photos/! To Process/2014/01/2014-01-14"),
         ("Data/Backup/1GB_1",
          "Data/Photos/! To Process/2014/01/2014-01-14"),
         ("Data/Photos/! To Process/2014/01/2014-01-14",
@@ -76,8 +100,10 @@ def test_multiple_rules(dir_a: str, dir_b: str, action: str):
          "Data/Backup/1GB_1"),
     ],
 )
-def test_no_config(dir_a: str, dir_b: str):
-    config = DuplicatesCleanup(SCRIPT_DIR.parent / "missing.yaml")
+def test_no_config(caplog, dir_a: str, dir_b: str):
+    caplog.set_level(logging.DEBUG)
+    config = DuplicatesCleanup(
+            SCRIPT_DIR.parent / "missing.yaml")
     assert config.select_dir_to_keep(dir_a, dir_b) == SKIP_ACTION
 
 
@@ -108,12 +134,14 @@ def test_no_config(dir_a: str, dir_b: str):
         ({1: ".com.google.Chrome.C4hlwU", 2: "abc.pdf"}, 2),
     ],
 )
-def test_select_file_to_keep(names: Dict[int, str], index: int):
+def test_select_file_to_keep(caplog, names: Dict[int, str], index: int):
+    caplog.set_level(logging.DEBUG)
     config = DuplicatesCleanup(TEST_CONFIG)
     assert config.select_file_to_keep(names) == index
 
 
-def test_bad_files_dict():
+def test_bad_files_dict(caplog):
+    caplog.set_level(logging.DEBUG)
     config = DuplicatesCleanup(TEST_CONFIG)
     with pytest.raises(IndexError):
         config.select_file_to_keep({0: "dummy"})

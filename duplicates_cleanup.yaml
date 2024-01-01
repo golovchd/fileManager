@@ -6,9 +6,9 @@ dir-commons:
   - keep: ^Data/Music
     delete: ^Data/Backup
   - keep: ^Data/Photos
-    delete: ^Data/Backup
+    skip: ^Data/Backup/.*(DropBox|Dropbox).*
   - keep: ^Data/Photos
-    skip: ^Data/Backup/Torus
+    delete: ^Data/Backup
   - keep: ^Data/Videos
     delete: ^Data/Backup
   - keep: ^Data/Videos
@@ -28,6 +28,14 @@ dir-commons:
     condition: latest
   - keep: ^Data/Photos
     delete: ^Data/Photos/! To Process/!!_conv
+  - keep: ^Data/Photos/! To DVD/
+    delete: ^Data/Photos/! To Process/
+  - keep: ^Data/Photos/! To Process/\d{4}
+    delete: ^Data/Photos/! To Process/!
+  - keep: ^Data/Photos/! To Process/.+/\[Originals\]
+    delete: ^Data/Photos/((?!\! To Process).)+/\[Originals\]
+  - keep: ^Data/Photos/! To DVD/.+/\[Originals\]
+    delete: ^Data/Photos/((?!\! To DVD).)+/\[Originals\]
   - keep: ^Data/Photos
     delete: ^Data/Photos/! To Process/!!/.+
   - keep: ^Data/Videos
@@ -38,6 +46,12 @@ dir-commons:
     delete: ^[^/]+/Data/
   - keep: ^[^/]+/Data/((?!Backup).)*/
     skip: ^Data/Backup/
+  - keep: ^Data/Backup/2016-04-03 Dell PP21L/
+    delete: ^Data/Backup/2016-04-03 HP 510/
+  - keep: ^Data/Videos/! To Process/\d{4}/\d{4}-\d{2}-\d{2}
+    delete: ^Data/Videos/! To Process/\d{4}(|/((?!\d{4}-\d{2}-\d{2}).)*)
+  - keep: ^Data/Photos/! To Process/\d{4}/\d{4}-\d{2}-\d{2}
+    delete: ^Data/Photos/! To Process/\d{4}(|/((?!\d{4}-\d{2}-\d{2}).)*)
 same-files:
   - keep: ^(?P<name>.+)cam\.(?P<ext>.+)$
     delete: ^(?P<name>((?!cam).)+)\.(?P<ext>.+)$

@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List
@@ -93,12 +94,15 @@ class DuplicatesCleanup:
 
     def select_dir_to_keep(self, dir_a: str, dir_b: str) -> str:
         """Returns dir to keep based on rules."""
+        logging.debug(f"select_dir_to_keep({dir_a}, {dir_b})")
         matched_rules: List[MatchedRule] = []
         for rule in self.config.get(DIR_CLEANUP_RULES, []):
             rule_result = (self.check_rule_basic(rule, dir_a, dir_b)
                            or self.check_skip_rule(rule, dir_a, dir_b)
                            or self.check_conditional_rule(rule, dir_a, dir_b))
             if rule_result:
+                logging.debug(f"Rule {rule} matched pair {dir_a} "
+                              f"{dir_b} as {rule_result}")
                 matched_rules.append(MatchedRule(rule, rule_result))
         if not matched_rules:
             return SKIP_ACTION
@@ -136,8 +140,12 @@ class DuplicatesCleanup:
                             break
                 else:  # No groups mismatch
                     if keep_match and not delete_match:
+                        logging.debug(f"Matched: keep rule {rule[KEEP_PREFIX]}"
+                                      f" for {index}: {name}")
                         keep_index = index
                     else:
+                        logging.debug(f"Matched: del rule {rule[KEEP_PREFIX]}"
+                                      f" for {index}: {name}")
                         delete_indexes.append(index)
                     continue  # Check next file
                 break  # Stop testing rule that had mismatched group
