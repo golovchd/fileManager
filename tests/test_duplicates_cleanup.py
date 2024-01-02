@@ -8,6 +8,7 @@ import pytest
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.append(str(SCRIPT_DIR.parent))
 
+from duplicates_cleanup import DIR_CLEANUP_RULES  # noqa: E402
 from duplicates_cleanup import LEFT_DIR_KEEP_ACTION  # noqa: E402
 from duplicates_cleanup import RIGHT_DIR_KEEP_ACTION  # noqa: E402
 from duplicates_cleanup import SKIP_ACTION, DuplicatesCleanup  # noqa: E402
@@ -15,99 +16,124 @@ from duplicates_cleanup import SKIP_ACTION, DuplicatesCleanup  # noqa: E402
 TEST_CONFIG = SCRIPT_DIR.parent / "duplicates_cleanup.yaml"
 
 
+dir_compare_list = [
+    ("Data/Backup/1GB_1",
+        "Data/Photos/! To Process/2014/01/2014-01-14",
+        RIGHT_DIR_KEEP_ACTION),
+    ("Data/Photos/2014",
+        "Data/Photos/! To Process/!!/blah",
+        LEFT_DIR_KEEP_ACTION),
+    ("Data/Photos/! To Process/2015",
+        "Data/Photos/! To Process/!!/blah",
+        LEFT_DIR_KEEP_ACTION),
+    ("Data/Videos/2014",
+        "Data/Videos/! To Process/!!/blah",
+        LEFT_DIR_KEEP_ACTION),
+    ("Data/Photos/! To Process/2014/01/2014-01-14",
+        "Data/Backup/1GB_1",
+        LEFT_DIR_KEEP_ACTION),
+    ("Data/Photos/! To Process/2014/01/2014-01-14",
+        "Data/Backup/test DropBox",
+        SKIP_ACTION),
+    ("Data/Photos/! To Process/2014/01/2014-01-14",
+        "Data/Backup/test DropBox/tmp",
+        SKIP_ACTION),
+    ("Data/Photos/! To Process/2014/01/2014-01-14",
+        "Data/Backup/DropBox/tmp",
+        SKIP_ACTION),
+    ("Data/Photos/! To Process/2008/2008-07-30",
+        "Data/Photos/! To Process/2008/2008-09-15",
+        SKIP_ACTION),
+    ("Data/Backup/2014-01-14 left",
+        "Data/Backup/2014-01-15 right",
+        RIGHT_DIR_KEEP_ACTION),
+    ("Data/Backup/2015-01-14 left",
+        "Data/Backup/2014-01-15 right",
+        LEFT_DIR_KEEP_ACTION),
+    ("Data/Backup/hdd_images/2015-01-14 left",
+        "Data/Backup/2014-01-15 right",
+        LEFT_DIR_KEEP_ACTION),
+    ("Data/Backup/2015-01-14 left",
+        "Data/Backup/hdd_images/2014-01-15 right",
+        LEFT_DIR_KEEP_ACTION),
+    ("Data/Backup/2015-01-14_Sony Xperia Backups",
+        "Data/Backup/2014-01-15 right",
+        RIGHT_DIR_KEEP_ACTION),
+    ("Data/Backup/tmp/2015-01-14_Sony Xperia Backups",
+        "Data/Backup/2014-01-15 right",
+        RIGHT_DIR_KEEP_ACTION),
+    ("Data/Backup/tmp/2015-01-14_Sony Xperia Backups",
+        "Data/Backup/tmp/2014-01-15 right",
+        RIGHT_DIR_KEEP_ACTION),
+    ("Data/Backup/2015-01-14_Sony Xperia Backups",
+        "Data/Backup/tmp/2014-01-15 right",
+        RIGHT_DIR_KEEP_ACTION),
+    ("Data/Photos",
+        "Data/Videos",
+        RIGHT_DIR_KEEP_ACTION),
+    ("Data/Anything",
+        "5TB-2/Data/Photos",
+        LEFT_DIR_KEEP_ACTION),
+    ("Data/Backup/2015-01-20 left",
+        "5TB-2/Data/Backup/2014-01-15 right",
+        LEFT_DIR_KEEP_ACTION),
+    ("tmp/Data/Photos/! To Process/2014/01/2014-01-14",
+        "Data/Backup/1GB_1",
+        SKIP_ACTION),
+    ("Data/Backup/1GB_1",
+        "tmp/Data/Photos/! To Process/2014/01/2014-01-14",
+        SKIP_ACTION),
+    ("Data/Photos/! To DVD/",
+        "Data/Photos/! To Process/",
+        LEFT_DIR_KEEP_ACTION),
+    ("Data/Photos/! To Process/2014/2014-01-14",
+        "Data/Photos/! To Process/2014",
+        LEFT_DIR_KEEP_ACTION),
+    ("Data/Photos/! To DVD/2011/2011-11-05-2/[Originals]",
+        "Data/Photos/Family/Tetiana Skurchynska/[Originals]",
+        LEFT_DIR_KEEP_ACTION),
+    ("Data/Photos/! To Process/2011/2011-11-05-2/[Originals]",
+        "Data/Photos/Family/Tetiana Skurchynska/[Originals]",
+        LEFT_DIR_KEEP_ACTION),
+    ("Data/Photos/! To Process/2011/2011-11-05-2/[Originals]",
+        "Data/Photos/! To DVD/2011/2011-11-05-2/[Originals]",
+        SKIP_ACTION),
+    ("Data/Videos/! To Process/2014/2014-01-14",
+        "Data/Videos/! To Process/2014",
+        LEFT_DIR_KEEP_ACTION),
+    ("hello",
+        "goodby",
+        SKIP_ACTION),
+]
+
+
 @pytest.mark.parametrize(
     "dir_a, dir_b, action",
-    [
-        ("Data/Backup/1GB_1",
-         "Data/Photos/! To Process/2014/01/2014-01-14",
-         RIGHT_DIR_KEEP_ACTION),
-        ("Data/Photos/2014",
-         "Data/Photos/! To Process/!!/blah",
-         LEFT_DIR_KEEP_ACTION),
-        ("Data/Photos/! To Process/2015",
-         "Data/Photos/! To Process/!!/blah",
-         LEFT_DIR_KEEP_ACTION),
-        ("Data/Videos/2014",
-         "Data/Videos/! To Process/!!/blah",
-         LEFT_DIR_KEEP_ACTION),
-        ("Data/Photos/! To Process/2014/01/2014-01-14",
-         "Data/Backup/1GB_1",
-         LEFT_DIR_KEEP_ACTION),
-        ("Data/Photos/! To Process/2014/01/2014-01-14",
-         "Data/Backup/test DropBox",
-         SKIP_ACTION),
-        ("Data/Photos/! To Process/2014/01/2014-01-14",
-         "Data/Backup/test DropBox/tmp",
-         SKIP_ACTION),
-        ("Data/Photos/! To Process/2014/01/2014-01-14",
-         "Data/Backup/DropBox/tmp",
-         SKIP_ACTION),
-        ("Data/Photos/! To Process/2008/2008-07-30",
-         "Data/Photos/! To Process/2008/2008-09-15",
-         SKIP_ACTION),
-        ("Data/Backup/2014-01-14 left",
-         "Data/Backup/2014-01-15 right",
-         RIGHT_DIR_KEEP_ACTION),
-        ("Data/Backup/2015-01-14 left",
-         "Data/Backup/2014-01-15 right",
-         LEFT_DIR_KEEP_ACTION),
-        ("Data/Backup/hdd_images/2015-01-14 left",
-         "Data/Backup/2014-01-15 right",
-         LEFT_DIR_KEEP_ACTION),
-        ("Data/Backup/2015-01-14 left",
-         "Data/Backup/hdd_images/2014-01-15 right",
-         LEFT_DIR_KEEP_ACTION),
-        ("Data/Backup/2015-01-14_Sony Xperia Backups",
-         "Data/Backup/2014-01-15 right",
-         RIGHT_DIR_KEEP_ACTION),
-        ("Data/Backup/tmp/2015-01-14_Sony Xperia Backups",
-         "Data/Backup/2014-01-15 right",
-         RIGHT_DIR_KEEP_ACTION),
-        ("Data/Backup/tmp/2015-01-14_Sony Xperia Backups",
-         "Data/Backup/tmp/2014-01-15 right",
-         RIGHT_DIR_KEEP_ACTION),
-        ("Data/Backup/2015-01-14_Sony Xperia Backups",
-         "Data/Backup/tmp/2014-01-15 right",
-         RIGHT_DIR_KEEP_ACTION),
-        ("Data/Photos",
-         "Data/Videos",
-         RIGHT_DIR_KEEP_ACTION),
-        ("Data/Anything",
-         "5TB-2/Data/Photos",
-         LEFT_DIR_KEEP_ACTION),
-        ("Data/Backup/2015-01-20 left",
-         "5TB-2/Data/Backup/2014-01-15 right",
-         LEFT_DIR_KEEP_ACTION),
-        ("tmp/Data/Photos/! To Process/2014/01/2014-01-14",
-         "Data/Backup/1GB_1",
-         SKIP_ACTION),
-        ("Data/Backup/1GB_1",
-         "tmp/Data/Photos/! To Process/2014/01/2014-01-14",
-         SKIP_ACTION),
-        ("Data/Photos/! To DVD/",
-         "Data/Photos/! To Process/",
-         LEFT_DIR_KEEP_ACTION),
-        ("Data/Photos/! To Process/2014/2014-01-14",
-         "Data/Photos/! To Process/2014",
-         LEFT_DIR_KEEP_ACTION),
-        ("Data/Photos/! To DVD/2011/2011-11-05-2/[Originals]",
-         "Data/Photos/Family/Tetiana Skurchynska/[Originals]",
-         LEFT_DIR_KEEP_ACTION),
-        ("Data/Photos/! To Process/2011/2011-11-05-2/[Originals]",
-         "Data/Photos/Family/Tetiana Skurchynska/[Originals]",
-         LEFT_DIR_KEEP_ACTION),
-        ("Data/Photos/! To Process/2011/2011-11-05-2/[Originals]",
-         "Data/Photos/! To DVD/2011/2011-11-05-2/[Originals]",
-         SKIP_ACTION),
-        ("Data/Videos/! To Process/2014/2014-01-14",
-         "Data/Videos/! To Process/2014",
-         LEFT_DIR_KEEP_ACTION),
-    ],
+    dir_compare_list
 )
 def test_multiple_rules(caplog, dir_a: str, dir_b: str, action: str):
     caplog.set_level(logging.DEBUG)
     config = DuplicatesCleanup(TEST_CONFIG)
     assert config.select_dir_to_keep(dir_a, dir_b) == action
+
+
+@pytest.mark.parametrize(
+    "dir_a, dir_b, action",
+    dir_compare_list
+)
+def test_exclusive_condition_matching(
+        caplog, dir_a: str, dir_b: str, action: str):
+    caplog.set_level(logging.DEBUG)
+    config = DuplicatesCleanup(TEST_CONFIG)
+    for rule in config.config.get(DIR_CLEANUP_RULES, []):
+        match_count = 0
+        if config.check_rule_basic(rule, dir_a, dir_b):
+            match_count += 1
+        if config.check_skip_rule(rule, dir_a, dir_b):
+            match_count += 1
+        if config.check_conditional_rule(rule, dir_a, dir_b):
+            match_count += 1
+        assert match_count == 1 or match_count == 0
 
 
 @pytest.mark.parametrize(
