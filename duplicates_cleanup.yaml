@@ -1,6 +1,8 @@
 dir-commons:
   - keep: ^Data/Audio
     delete: ^Data/Backup
+  - keep: ^Data/Books
+    delete: ^Data/Backup
   - keep: ^Data/Music/!Russian music
     delete: ^Data/Music/!!Car Audio
   - keep: ^Data/Movies
