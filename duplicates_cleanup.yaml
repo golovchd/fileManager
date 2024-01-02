@@ -55,7 +55,7 @@ dir-commons:
   - keep: ^Data/Videos/! To Process/\d{4}/\d{4}-\d{2}-\d{2}
     delete: ^Data/Videos/! To Process/\d{4}(|/((?!\d{4}-\d{2}-\d{2}).)*)
   - keep: ^Data/Photos/! To Process/\d{4}/\d{4}-\d{2}-\d{2}
-    delete: ^Data/Photos/! To Process/\d{4}(|/((?!\d{4}-\d{2}-\d{2}).)*)
+    delete: ^Data/Photos/! To Process/\d{4}(|/((?!\d{4}-\d{2}-\d{2}).)*)$
 same-files:
   - keep: ^(?P<name>.+)cam\.(?P<ext>.+)$
     delete: ^(?P<name>((?!cam).)+)\.(?P<ext>.+)$
