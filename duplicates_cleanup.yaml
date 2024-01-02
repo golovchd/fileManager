@@ -22,8 +22,10 @@ dir-commons:
   - keep: ^Data/Backup/.*(?P<date>\d{4}-\d{2}-\d{2})((?!Xperia).)*$
     delete: ^Data/Backup/.*(?P<date>\d{4}-\d{2}-\d{2}).*Xperia
   - keep: ^Data/Backup/.*(?P<date>\d{4}-\d{2}-\d{2})((?!Xperia).)*$
-    delete: ^Data/Backup/.*(?P<date>\d{4}-\d{2}-\d{2})
+    delete: ^Data/Backup/.*(?P<date>\d{4}-\d{2}-\d{2})((?!(?:/svn|/git|\/.git|\/.svn)).)*$
     condition: latest
+  - keep: ^.*
+    skip: ^.*/(svn|git|\.svn|\.git)/.*$
   - keep: ^Data/Photos
     delete: ^Data/Photos/! To Process/!!_conv
   - keep: ^Data/Photos/! To DVD/
