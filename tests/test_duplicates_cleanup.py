@@ -180,6 +180,7 @@ def test_no_config(caplog, dir_a: str, dir_b: str):
         ({1: "aaa.jpg", 2: "aaa(1).jpg", 3: "aaa(2).jpg", 4: "aaa(3).jpg"}, 1),
         ({1: "aaa(1).jpg", 2: "aaa.jpg", 3: "aaa(2).jpg", 4: "aaa(3).jpg"}, 2),
         ({1: "aaa(1).jpg", 2: "aaa(2).jpg", 3: "aaa(3).jpg", 4: "aaa.jpg"}, 4),
+        ({1: "aaa (1).jpg", 2: "aaa.jpg", 3: "aaa (2).jpg"}, 2),
         ({1: "123cam.jpg", 2: "123.jpg"}, 1),
         ({1: "123cam.jpg", 2: "321.jpg"}, 0),
         ({1: "aaa.jpg.bak", 2: "bbb.jpg"}, 0),

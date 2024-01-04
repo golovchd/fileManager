@@ -79,6 +79,9 @@ same-files:
   - keep: ^(?P<name>.+)\.(?P<ext>.+)$
     delete: ^(?P<name>.+)\(\d+\)\.(?P<ext>.+)$
     groups: [name, ext]
+  - keep: ^(?P<name>.+)\.(?P<ext>.+)$
+    delete: ^(?P<name>.+) \(\d+\)\.(?P<ext>.+)$
+    groups: [name, ext]
   - keep: ^((?!\.com\.google\.Chrome\.).)+$
     delete: ^\.com\.google\.Chrome\..+$
     groups: []
