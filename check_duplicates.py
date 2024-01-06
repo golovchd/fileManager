@@ -383,17 +383,18 @@ class FileDuplicates(FileManagerDatabase):
         keep_idx = -1
         duplicates_count = len(fsrecord_id_list)
         keep_idx = default_idx if self.auto_execute_default else -1
+        print(f"Select file to keep, 0 to skip cleanup: [{default_idx}]",
+              end="\n" if self.auto_execute_default else "")
         while keep_idx < 0 or keep_idx > duplicates_count:
             try:
-                value = input("Select file to keep, 0 to skip cleanup: "
-                              f"[{default_idx}]")
+                value = input()
                 if value == "":
                     keep_idx = default_idx
                 else:
                     keep_idx = int(value)
             except ValueError:
                 print(f"{value} is not a correct index, please enter number "
-                      f"0..{duplicates_count}")
+                      f"0..{duplicates_count}", end="")
         if keep_idx == 0:
             return 0
         keep_fsrecord_id = int(fsrecord_id_list[keep_idx - 1])
@@ -462,13 +463,19 @@ class FileDuplicates(FileManagerDatabase):
     def dirs_cleanup_action(self, common_files: Dict[int, DirsPair],
                             default_action: str) -> int:
         action = default_action if self.auto_execute_default else ""
+        print(
+            f"Enter action ({SKIP_ACTION}-skip/"
+            f"{LEFT_DIR_KEEP_ACTION}-keep left, remove right/"
+            f"{RIGHT_DIR_KEEP_ACTION}-keep right, remove left) "
+            f"[{default_action}]: ",
+            end="\n" if self.auto_execute_default else ""
+        )
         while action not in ALLOWED_ACTIONS:
-            action = input(
-                f"Enter action ({SKIP_ACTION}-skip/"
-                f"{LEFT_DIR_KEEP_ACTION}-keep left, remove right/"
-                f"{RIGHT_DIR_KEEP_ACTION}-keep right, remove left) "
-                f"[{default_action}]: "
-            )
+            if action:
+                print(f"Incorrect action {action}, please enter",
+                      "/".join(ALLOWED_ACTIONS), "or enter for default",
+                      f"[{default_action}]")
+            action = input()
             if not action:
                 action = default_action
         if action == SKIP_ACTION:
