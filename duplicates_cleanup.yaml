@@ -28,7 +28,7 @@ dir-commons:
     condition: latest
   - keep: ^.*
     skip: ^.*/(svn|git|\.svn|\.git)/.*$
-  - keep: ^Data/Photos
+  - keep: ^Data/Photos/((?!\! To Process).)+
     delete: ^Data/Photos/! To Process/!!_conv
   - keep: ^Data/Photos/! To DVD/
     delete: ^Data/Photos/! To Process/
