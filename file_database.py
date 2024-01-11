@@ -87,6 +87,7 @@ class FileManagerDatabase(SQLite3connection):
         self._path_cache: Dict[int, str] = {}
         self._cur_dir_id: int = 0
         self._cur_dir_path: Path = Path(".")
+        self.mountpoint: Path = Path(".")
 
     def _set_disk(self, id: int, uuid: str, size: int, label: str) -> None:
         self._disk_id = id
@@ -99,6 +100,11 @@ class FileManagerDatabase(SQLite3connection):
     @property
     def disk_name(self) -> str:
         return self._disk_label or self._disk_uuid or ""
+
+    def set_mountpoint(self):
+        """Request lsblk disk info, raises ValueError if not mounted."""
+        self.mountpoint = Path(
+                file_utils.get_disk_info(self._disk_uuid)["mountpoint"])
 
     def _save_path_cache(self, path_id: int, path: str) -> None:
         """Updates id and path caches."""

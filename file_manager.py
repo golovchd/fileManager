@@ -3,6 +3,7 @@
 import argparse
 import logging
 from pathlib import Path
+from shutil import move
 from typing import Callable, List, Tuple
 
 from file_database import DEFAULT_DATABASE, FileManagerDatabase
@@ -38,6 +39,8 @@ _UNIQUE_FILES_SIZE_DISKS = ("SELECT `disks`.`ROWID`, `UUID`, `Label`, "
                             "ON `unique_files`.`DiskId` = `disks`.`ROWID` "
                             "GROUP BY `disks`.`ROWID` "
                             "ORDER BY `disks`.`ROWID`")
+_MOVE_FS_RECORD = ("UPDATE `fsrecords` SET `ParentId` = ? `Name` = ? "
+                   "WHERE `ROWID` = ?")
 
 
 _SORT_OPTIONS = ["id", "uuid", "label", "disk-size", "files-size", "usage"]
@@ -180,6 +183,53 @@ class FileUtils(FileManagerDatabase):
                   f"contains {files_count} files and {subdir_count} subdirs")
         return dir_size, files_count, subdir_count
 
+    def move_fs_item(
+            self, disk: str, src: str, dst: str, dry_run: bool) -> int:
+        self.set_disk_by_name(disk)
+        self.set_mountpoint()
+
+        src_path = self.mountpoint / src
+        if not src_path.exists():
+            raise ValueError(f"Path {src} does not exist on disk {disk}")
+        is_file = src_path.is_file()
+        if not is_file:
+            if src_path.is_mount():
+                raise ValueError(f"Path {src} is mount point for {disk}")
+            if not src_path.is_dir():
+                raise ValueError(
+                        f"Path {src} is neither file not dir on {disk}")
+
+        parent_id = self.get_dir_id(src.split("/")[:-1])
+        logging.debug(
+            f"Found src parent fsrecord_id {parent_id} for {src_path.parent}")
+        object_id = self.get_fsrecord_id(src_path.name, parent_id,
+                                         is_file=is_file)
+        logging.debug(f"Found src fsrecord_id {object_id} for {src_path}")
+
+        target_parent_from_mount = dst.split("/")[:-1]
+        if dst.endswith("/"):
+            dst += src_path.name
+        dst_path = self.mountpoint / dst
+        if dst_path.exists():
+            raise ValueError(f"Destination path {dst_path} already exist")
+        if not dst_path.parent.exists():
+            dst_path.parent.mkdir(parents=True)
+        dst_parent_id = self.get_dir_id(
+                target_parent_from_mount, insert_dirs=False)
+        logging.debug(f"Found dst parent fsrecord_id {dst_parent_id} for "
+                      f"{dst_path.parent}")
+        logging.debug(f"Moving dir {src_path} to {dst_path}")
+
+        if not dry_run and move(src_path, dst_path) == dst_path:
+            self._exec_query(
+                    _MOVE_FS_RECORD, (dst_parent_id, dst_path.name, object_id),
+                    commit=True)
+        elif dry_run:
+            logging.info(f"Dry run, DB parent undate {parent_id}->"
+                         f"{dst_parent_id}, name {dst_path.name} for fsrecord "
+                         f"{object_id} skipped")
+        return 0
+
 
 def print_dir_content(dir_path: str, dir_content: List[List[str]]) -> None:
     headers = ["Name", "Size", "File Date", "Hash Date, SHA256"]
@@ -209,6 +259,11 @@ def list_dir_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     file_db.list_dir(
         args.disk, args.dir_path, args.recursive, summary=args.summary)
     return 0
+
+
+def move_command(file_db: FileUtils, args: argparse.Namespace) -> int:
+    return file_db.move_fs_item(
+            args.disk, args.src_path, args.dst_path, args.dry_run)
 
 
 def update_disk_command(file_db: FileUtils, args: argparse.Namespace) -> int:
@@ -261,6 +316,15 @@ def parse_arguments() -> argparse.Namespace:
     list_dir.add_argument(
         "-s", "--summary", help="Print only summary", action="store_true")
 
+    move_object = subparsers.add_parser(
+        "move", help="Move dir, update DB accordingly")
+    move_object.set_defaults(func=move_command, cmd_name="move")
+    move_object.add_argument("src_path", type=str, help="Path to dir to move")
+    move_object.add_argument("dst_path", type=str, help="Destination path")
+    move_object.add_argument("--dry-run",
+                             help="Do not move dir, run all checks",
+                             action="store_true")
+
     update_disk = subparsers.add_parser(
         "update-disk", help="Update disk with given UUID")
     update_disk.set_defaults(func=update_disk_command, cmd_name="update-disk")
@@ -274,10 +338,9 @@ def parse_arguments() -> argparse.Namespace:
         default=_SORT_OPTIONS_UNIQUE[0])
 
     args = arg_parser.parse_args()
-    if args.cmd_name == "list-dir" and not args.disk:
-        arg_parser.error("-d DISK argument is required for list-dir")
-    if args.cmd_name == "update-disk" and not args.disk:
-        arg_parser.error("-d DISK argument is required for update-disk")
+    disk_required = ["list-dir", "move", "update-disk"]
+    if args.cmd_name in disk_required and not args.disk:
+        arg_parser.error(f"-d DISK argument is required for {args.cmd_name}")
     return args
 
 

@@ -14,7 +14,6 @@ from duplicates_cleanup import (ALLOWED_ACTIONS, LEFT_DIR_KEEP_ACTION,
                                 RIGHT_DIR_KEEP_ACTION, SKIP_ACTION,
                                 DuplicatesCleanup)
 from file_database import DEFAULT_DATABASE, FileManagerDatabase
-from file_manager import get_disk_info
 from file_utils import generate_file_sha1
 from utils import print_table
 
@@ -99,7 +98,6 @@ class FileDuplicates(FileManagerDatabase):
         self.compare_count = 0
         self.checked_dirs: Dict[DirsPair, bool] = {}
         self.duplicate_dirs: Dict[DirsPair, DirsDifference] = {}
-        self.mountpoint: Path = Path(".")
         self.file_info: Dict[int, FileInfo] = {}
         self.fsrecord_info: Dict[int, FSRecortInfo] = {}
         self.dir_fsrecords: Dict[int, List[int]] = {}
@@ -109,10 +107,6 @@ class FileDuplicates(FileManagerDatabase):
         self.cleanup = cleanup
         self.dry_run = dry_run
         self.auto_execute_default = auto_execute_default
-
-    def set_mountpoint(self):
-        """Request lsblk disk info, raises ValueError if not mounted."""
-        self.mountpoint = Path(get_disk_info(self._disk_uuid)["mountpoint"])
 
     def process_profile(
             self, dir_a: int, dir_b: int, match: bool,
