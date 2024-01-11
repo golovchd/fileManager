@@ -18,6 +18,7 @@ from file_utils import generate_file_sha1
 from utils import print_table
 
 DEFAULT_MIN_SIZE = 1000000  # 1 MB
+DEFAULT_MIN_COMMON_MB = 20  # 20 MB
 
 DISK_SELECT_LABEL = ("SELECT `ROWID`, `UUID`, `DiskSize`, `Label` "
                      "FROM `disks` WHERE `Label` = ?")
@@ -81,7 +82,7 @@ class FSRecortInfo:
 class DirsDifference:
     files_a_not_b: Dict[int, int]
     files_b_not_a: Dict[int, int]
-    matching_size: int
+    matching_size: float
     common_files: Dict[int, int]
 
 
@@ -158,7 +159,8 @@ class FileDuplicates(FileManagerDatabase):
                 self.dir_fsrecords[dir_b].append(row[0])
         return a_file_size, b_file_size
 
-    def compare_dirs(self, dir_a: int, dir_b: int, max_diff: int) -> bool:
+    def compare_dirs(
+            self, dir_a: int, dir_b: int, min_common_size: float) -> bool:
         """Compares dirs by SHA1 of files in them."""
         if DirsPair(dir_a, dir_b) in self.checked_dirs:
             logging.debug(f"Dir pair {dir_a},{dir_b} was tested before")
@@ -170,15 +172,24 @@ class FileDuplicates(FileManagerDatabase):
         dir_b_path = self.get_path(dir_b)
         logging.debug(
             f"comparing Dir pair {dir_a_path},{dir_b_path}"
-            f" ({dir_a},{dir_b}) for max {max_diff} diff files")
+            f" ({dir_a},{dir_b}) for min common size {min_common_size} MB")
         a_file_size, b_file_size = self.query_files(dir_a, dir_b)
         query_time = clock_gettime_ns(CLOCK_MONOTONIC)
 
         matching_files = {a_file_id: a_file_size[a_file_id]
                           for a_file_id in a_file_size
                           if a_file_id in b_file_size}
-        matching_size = sum(matching_files.values())
+        matching_size = round(sum(matching_files.values()) / 1000000, 2)
         size_time = clock_gettime_ns(CLOCK_MONOTONIC)
+
+        if matching_size < min_common_size:
+            logging.debug(f"Dir {dir_a_path} is matching {dir_b_path} with "
+                          f"{matching_size} MB of the common files, ignored")
+            end_time = clock_gettime_ns(CLOCK_MONOTONIC)
+            return self.mark_as_checked(
+                dir_a, dir_b, False,
+                [start_time, query_time, size_time, end_time,
+                 end_time, 1, len(a_file_size), len(b_file_size)])
 
         dirs_files_matches: bool = (a_file_size.keys() == b_file_size.keys())
         dirs_files_matches_time = clock_gettime_ns(CLOCK_MONOTONIC)
@@ -200,21 +211,9 @@ class FileDuplicates(FileManagerDatabase):
             b: b_file_size[b] for b in b_file_size if b not in a_file_size}
         diff_count = len(a_not_b_size) + len(b_not_a_size)
 
-        if (diff_count > max_diff and
-                len(a_not_b_size) > max_diff and
-                len(b_not_a_size) > max_diff):
-            logging.debug(
-                f"Dir {dir_a_path} different from {dir_b_path}"
-                f" with {diff_count} differences")
-            end_time = clock_gettime_ns(CLOCK_MONOTONIC)
-            return self.mark_as_checked(
-                dir_a, dir_b, False,
-                [start_time, query_time, size_time, dirs_files_matches_time,
-                 end_time, 2, len(a_file_size), len(b_file_size)])
-
         if not a_not_b_size:
             logging.info(f"Files of dir {dir_a_path} contained "
-                         f"in {dir_b_path}")
+                         f"in {dir_b_path}, common size {matching_size} MB")
             self.duplicate_dirs[DirsPair(dir_a, dir_b)] = DirsDifference(
                 a_not_b_size, b_not_a_size, matching_size, matching_files)
             end_time = clock_gettime_ns(CLOCK_MONOTONIC)
@@ -224,8 +223,8 @@ class FileDuplicates(FileManagerDatabase):
                  end_time, 3, len(a_file_size), len(b_file_size)])
 
         if not b_not_a_size:
-            logging.info(f"Files of {dir_b_path} "
-                         f"contained in {dir_a_path}")
+            logging.info(f"Files of {dir_b_path} contained in {dir_a_path}, "
+                         f"common size {matching_size} MB")
             self.duplicate_dirs[DirsPair(dir_b, dir_a)] = DirsDifference(
                 b_not_a_size, a_not_b_size, matching_size, matching_files)
             end_time = clock_gettime_ns(CLOCK_MONOTONIC)
@@ -238,47 +237,17 @@ class FileDuplicates(FileManagerDatabase):
             DirsPair(dir_a, dir_b): DirsDifference(
                 a_not_b_size, b_not_a_size, matching_size, matching_files)
         }
-        if diff_count <= max_diff:
-            logging.info(
-                f"Dir {dir_a_path} is matching "
-                f"{dir_b_path} with {diff_count} differences")
-            self.duplicate_dirs.update(result)
-            end_time = clock_gettime_ns(CLOCK_MONOTONIC)
-            return self.mark_as_checked(
-                dir_a, dir_b, True,
-                [start_time, query_time, size_time, dirs_files_matches_time,
-                 end_time, 5, len(a_file_size), len(b_file_size)])
-        if len(a_not_b_size) <= max_diff:
-            logging.info(f"Files of {dir_a_path} contained in "
-                         f"{dir_b_path} with "
-                         f"all but {len(a_not_b_size)} files")
-            self.duplicate_dirs.update(result)
-            end_time = clock_gettime_ns(CLOCK_MONOTONIC)
-            return self.mark_as_checked(
-                dir_a, dir_b, True,
-                [start_time, query_time, size_time, dirs_files_matches_time,
-                 end_time, 6, len(a_file_size), len(b_file_size)])
-        if len(b_not_a_size) <= max_diff:
-            logging.info(f"Files of {dir_b_path} contained in "
-                         f"{dir_a_path} with "
-                         f"all but {len(b_not_a_size)} files")
-            self.duplicate_dirs.update(result)
-            end_time = clock_gettime_ns(CLOCK_MONOTONIC)
-            return self.mark_as_checked(
-                dir_a, dir_b, True,
-                [start_time, query_time, size_time, dirs_files_matches_time,
-                 end_time, 7, len(a_file_size), len(b_file_size)])
-
-        logging.warning(
-            f"Dir {dir_a_path} different from {dir_b_path}"
-            f" with {diff_count} differences")
+        logging.info(
+            f"Dir {dir_a_path} is matching {dir_b_path} with {diff_count} "
+            f"differences, common size {matching_size} MB")
+        self.duplicate_dirs.update(result)
         end_time = clock_gettime_ns(CLOCK_MONOTONIC)
         return self.mark_as_checked(
-            dir_a, dir_b, False,
+            dir_a, dir_b, True,
             [start_time, query_time, size_time, dirs_files_matches_time,
-             end_time, 8, len(a_file_size), len(b_file_size)])
+                end_time, 5, len(a_file_size), len(b_file_size)])
 
-    def sort_output_duplicate_dirs(self, max_diff: int) -> None:
+    def sort_output_duplicate_dirs(self, min_common_size: float) -> None:
         """"Sorts and prints dound duplicates, triggers cleanup if needed."""
         sorted_duplicates = sorted(
             self.duplicate_dirs.keys(),
@@ -293,26 +262,21 @@ class FileDuplicates(FileManagerDatabase):
                 status = "left_in_right"
             elif not self.duplicate_dirs[dir_pair].files_b_not_a:
                 status = "right_in_left"
-            elif (len(self.duplicate_dirs[dir_pair].files_a_not_b) +
-                  len(self.duplicate_dirs[dir_pair].files_b_not_a)
-                  ) <= max_diff:
-                status = f"mismatch_under_{max_diff}"
-            elif len(self.duplicate_dirs[dir_pair].files_a_not_b) <= max_diff:
-                status = f"left_mismatch_right_under_{max_diff}"
-            elif len(self.duplicate_dirs[dir_pair].files_b_not_a) <= max_diff:
-                status = f"right_mismatch_left_under_{max_diff}"
+            elif (self.duplicate_dirs[dir_pair].matching_size >=
+                  min_common_size):
+                status = "partially_matching"
             else:
                 status = "unexpected"
 
-            print(f"{self.duplicate_dirs[dir_pair].matching_size} B {status}: "
-                  f"'{self.get_path(dir_pair.DirAId)}' "
-                  f"'{self.get_path(dir_pair.DirBId)}'")
+            print(f"{self.duplicate_dirs[dir_pair].matching_size} MB {status}:"
+                  f" '{self.get_path(dir_pair.DirAId)}'"
+                  f" '{self.get_path(dir_pair.DirBId)}'")
             if self.cleanup:
                 reclaimed_size += self.dirs_pair_cleanup(dir_pair)
         if self.cleanup:
             print(f"{reclaimed_size}B was reclaimed")
 
-    def search_duplicate_folders(self, max_diff: int) -> None:
+    def search_duplicate_folders(self, min_common_size: int) -> None:
         start_time = clock_gettime_ns(CLOCK_MONOTONIC)
         for row in self._exec_query(DUPLICATES_FOLDERS,
                                     (self._disk_id, self._min_size),
@@ -324,9 +288,9 @@ class FileDuplicates(FileManagerDatabase):
                 for j in range(i + 1, len(dirs)):
                     if dirs[i] == dirs[j]:
                         continue
-                    self.compare_dirs(dirs[i], dirs[j], max_diff)
+                    self.compare_dirs(dirs[i], dirs[j], min_common_size)
         query_time = clock_gettime_ns(CLOCK_MONOTONIC)
-        self.sort_output_duplicate_dirs(max_diff)
+        self.sort_output_duplicate_dirs(min_common_size)
         sort_time = clock_gettime_ns(CLOCK_MONOTONIC)
         logging.info(f"Query time {query_time - start_time} ns, "
                      f"Sort time {sort_time - query_time}, "
@@ -558,10 +522,11 @@ def main(argv):
         required=False,
         default=DEFAULT_DATABASE)
     arg_parser.add_argument(
-        "-d", "--max-diff",
+        "-m", "--min-common-size",
         type=int,
-        help="Number of different files to consider as duplicate.",
-        default=0)
+        help=("Minimum size in MB of common files to consider dirs as "
+              f"duplicate, default {DEFAULT_MIN_COMMON_MB} MB."),
+        default=DEFAULT_MIN_COMMON_MB)
     arg_parser.add_argument(
         "-s", "--min-size",
         type=int,
@@ -599,7 +564,7 @@ def main(argv):
         if args.cleanup:
             file_db.set_mountpoint()
         file_db.search_file_copies_in_folder()
-        file_db.search_duplicate_folders(args.max_diff)
+        file_db.search_duplicate_folders(args.min_common_size)
 
 
 if __name__ == "__main__":

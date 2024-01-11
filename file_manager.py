@@ -39,7 +39,7 @@ _UNIQUE_FILES_SIZE_DISKS = ("SELECT `disks`.`ROWID`, `UUID`, `Label`, "
                             "ON `unique_files`.`DiskId` = `disks`.`ROWID` "
                             "GROUP BY `disks`.`ROWID` "
                             "ORDER BY `disks`.`ROWID`")
-_MOVE_FS_RECORD = ("UPDATE `fsrecords` SET `ParentId` = ? `Name` = ? "
+_MOVE_FS_RECORD = ("UPDATE `fsrecords` SET `ParentId` = ?, `Name` = ? "
                    "WHERE `ROWID` = ?")
 
 
