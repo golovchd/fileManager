@@ -530,7 +530,8 @@ def main(argv):
     arg_parser.add_argument(
         "-s", "--min-size",
         type=int,
-        help="Minimum size of the file to check duplicate.",
+        help=("Minimum size in Bytes of the file to check duplicate, default "
+              f"{DEFAULT_MIN_SIZE} B."),
         default=DEFAULT_MIN_SIZE)
     arg_parser.add_argument("-c", "--cleanup",
                             help="Run inteructive cleanup mode",
