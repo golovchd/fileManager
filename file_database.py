@@ -67,6 +67,9 @@ _FS_FILE_SELECT = ("SELECT `fsrecords`.`ROWID`, `fsrecords`.`SHA1ReadDate`, "
                    " ON `files`.`ROWID` = `fsrecords`.`FileId`"
                    " WHERE `DiskId` = ? AND `ParentId` = ? AND `Name` = ?"
                    " AND `FileId` IS NOT NULL")
+_SELECT_SUBDIRS = ("SELECT `ROWID`, `Name`, `ParentId` FROM `fsrecords` "
+                   "WHERE `ParentId` IN(?{}) AND `FileId` IS NULL "
+                   "ORDER BY `ParentId`, `Name`")
 
 
 class FileManagerDatabase(SQLite3connection):
@@ -266,6 +269,23 @@ class FileManagerDatabase(SQLite3connection):
 
         self._save_path_cache(fsrecord_id, fsrecord_path)
         return fsrecord_path
+
+    def query_subdirs(self, dir: int, recursively: bool = False) -> List[int]:
+        """Queries files of given pair of dirs."""
+        subdirs = []
+        parents = [dir]
+        while parents:
+            next_parents = []
+            for row in self._exec_query(
+                    _SELECT_SUBDIRS.format(",?" * (len(parents) - 1)),
+                    parents, commit=False):
+                subdirs.append(row[0])
+                if recursively:
+                    next_parents.append(row[0])
+                self._save_path_cache(
+                    row[0], f"{self.get_path(row[2])}/{row[1]}")
+            parents = next_parents
+        return subdirs
 
     def set_cur_dir(self, dir_path: Path):
         """Saving/updating dir with a path to disk root."""

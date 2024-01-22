@@ -2,7 +2,7 @@ import sqlite3
 import sys
 import time
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 import pytest
 
@@ -119,3 +119,20 @@ def test_get_path(
         assert db.get_path(fsrecord_id) == fsrecord_path
         assert db._path_cache == dir_cache
         assert db._id_cache[1] == id_cache
+
+
+@pytest.mark.parametrize(
+    "dir, recursive, subdirs",
+    [
+        (1, False, [2]),
+        (6, False, [7, 14]),
+        (6, True, [7, 14, 18, 20]),
+    ]
+)
+def test_query_subdirs(
+        tmp_path: Path, dir: int, recursive: bool, subdirs: List[int]) -> None:
+    reference_db_path = tmp_path / _TEST_DB_NAME
+    create_db(reference_db_path, _DB_TEST_DB_DUMP)
+    with FileManagerDatabase(reference_db_path, time.time()) as db:
+        db.set_disk("0a2e2cb7-4543-43b3-a04a-40959889bd45", 59609420, "")
+        assert db.query_subdirs(dir, recursive) == subdirs

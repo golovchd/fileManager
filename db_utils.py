@@ -2,7 +2,7 @@ import logging
 import sqlite3
 from pathlib import Path
 from time import sleep
-from typing import Dict, List, Tuple
+from typing import Dict, List, Sequence
 
 TABLE_SELECT = "SELECT `ROWID`, `{}`.* FROM `{}` ORDER BY `ROWID`"
 # Tables and indexes to ignore
@@ -69,7 +69,7 @@ class SQLite3connection:
         if self._con:
             self._con.close()
 
-    def _exec_query(self, sql: str, params: Tuple, commit=True):
+    def _exec_query(self, sql: str, params: Sequence, commit=True):
         """SQL quesy executor with logging."""
         delay: float = _RETRY_FIRST_DELAY
         for retry in range(_RETRY_COUNT):
