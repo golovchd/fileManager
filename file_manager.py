@@ -10,6 +10,18 @@ from file_database import DEFAULT_DATABASE, FileManagerDatabase
 from file_utils import get_disk_info
 from utils import print_table, timestamp2exif_str
 
+_BACKUP_COUNT = ("SELECT `fsrecords`.*, `files`.* FROM ("
+                 "  SELECT * FROM ("
+                 "    SELECT `FileId`, COUNT(DISTINCT `DiskId`) "
+                 "      AS `FileDisksCount` FROM `fsrecords` "
+                 "    WHERE `FileId` IS NOT NULL "
+                 "    GROUP BY `FileId`) "
+                 "  WHERE `FileDisksCount` <= ?) AS `count_files` "
+                 "INNER JOIN `fsrecords` ON "
+                 "`count_files`.`FileId` = `fsrecords`.`FileId` "
+                 "INNER JOIN `files` ON "
+                 "`count_files`.`FileId` = `files`.`ROWID` "
+                 "WHERE `DiskId` = ? {}")
 _DISKS_SELECT = "SELECT `ROWID`, `UUID`, `Label`, `DiskSize`/1024 FROM `disks`"
 _DISK_SELECT_SIZE = ("SELECT `disks`.`ROWID`, `UUID`, `Label`, "
                      "`DiskSize`/1024, SUM(`FileSize`)/1048576 FROM `disks`"
@@ -73,6 +85,36 @@ class FileUtils(FileManagerDatabase):
                 row.append(round(100 * row[-1] / row[-2], 2))
             disks.append(row)
         return disks
+
+    def backups_count(
+            self, disk: str, count_limit: int, parent_path: str) -> int:
+        self.set_disk_by_name(disk)
+        extra_query = ""
+        params = [count_limit, self._disk_id]
+        if parent_path:
+            parent_id = self.get_dir_id(
+                parent_path.split("/"), insert_dirs=False)
+            subdirs = self.query_subdirs(parent_id, recursively=True)
+            extra_query = f" AND `ParentId` IN (?{',?' * len(subdirs)})"
+            params.append(parent_id)
+            params.extend(subdirs)
+        files_list = []
+        for row in self._exec_query(
+                _BACKUP_COUNT.format(extra_query), params, commit=False):
+            files_list.append([
+                self.get_path(row[1]), row[0], row[7], row[3], row[8]])
+        headers = [f"Path on disk {self._disk_label}",
+                   "Name", "File Size, B", "File Date", "File SHA1"]
+        formats: List[Callable] = [
+            str,
+            str,
+            str,
+            timestamp2exif_str,
+            str
+        ]
+        print_table(sorted(files_list, key=lambda info: info[0]),
+                    headers, aligns=["<", "<", ">", ">", "<"], formats=formats)
+        return 0
 
     def list_disks(self, filter: str, cal_size: bool, sort_by: str) -> None:
         disks_list = self.query_disks(filter)
@@ -152,7 +194,6 @@ class FileUtils(FileManagerDatabase):
         for row in self._exec_query(
                 _DIR_LIST_SELECT, (self._cur_dir_id,), commit=False):
             dir_content.append(row)
-            print(dir_content[-1])
             dir_size += int(row[5]) if row[5] else 0
             if row[5]:
                 files_count += 1
@@ -266,6 +307,10 @@ def move_command(file_db: FileUtils, args: argparse.Namespace) -> int:
             args.disk, args.src_path, args.dst_path, args.dry_run)
 
 
+def backups_count_command(file_db: FileUtils, args: argparse.Namespace) -> int:
+    return file_db.backups_count(args.disk, args.count_limit, args.parent_path)
+
+
 def update_disk_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     file_db.update_disk(args.disk)
     return 0
@@ -290,12 +335,25 @@ def parse_arguments() -> argparse.Namespace:
         help="Database file path",
         required=False,
         default=DEFAULT_DATABASE)
+    disk_required = ["backups-count", "list-dir", "move", "update-disk"]
     arg_parser.add_argument(
         "-d", "--disk", type=str,
-        help=("Disk label or UUID to process, requirted for list-dir, "
-              "update-disk"))
+        help=("Disk label or UUID to process, requirted for " +
+              ", ".join(disk_required)))
     subparsers = arg_parser.add_subparsers(
         help="Commands supported by CLI tool", dest="command")
+
+    backups_count = subparsers.add_parser(
+        "backups-count", help=("Displays files of the disk(s) with specific "
+                               "number of copies"))
+    backups_count.set_defaults(func=backups_count_command,
+                               cmd_name="backups-count")
+    backups_count.add_argument(
+        "-c", "--count-limit",
+        help="Max number of file's backups to select, default 1",
+        type=int, default=1)
+    backups_count.add_argument("-p", "--parent-path", type=str,
+                               help="Filter files by parent path")
 
     list_disks = subparsers.add_parser(
         "list-disks", help="List disks with statistic")
@@ -338,7 +396,6 @@ def parse_arguments() -> argparse.Namespace:
         default=_SORT_OPTIONS_UNIQUE[0])
 
     args = arg_parser.parse_args()
-    disk_required = ["list-dir", "move", "update-disk"]
     if args.cmd_name in disk_required and not args.disk:
         arg_parser.error(f"-d DISK argument is required for {args.cmd_name}")
     return args
