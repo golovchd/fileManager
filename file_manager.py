@@ -102,7 +102,20 @@ def parse_arguments() -> argparse.Namespace:
     list_dir.set_defaults(func=list_dir_command)
     list_dir.add_argument("dir_path", type=str, help="Path to dir to list")
     list_disks.add_argument(
-        "-r", "--recursive", help="List dir recursively", action="store_true")
+        "-R", "--recursive", help="List dir recursively", action="store_true")
+    sort = arg_parser.add_mutually_exclusive_group()
+    sort.add_argument(
+        "-S", "--sort-size", help="sort by file size, largest first",
+        action="store_true")
+    sort.add_argument(
+        "-t", "--sort-time", help="sort by modification time, newest first",
+        action="store_true")
+    sort.add_argument(
+        "-X", "--sort-extension",
+        help="sort alphabetically by entry extension", action="store_true")
+    list_disks.add_argument(
+        "-r", "--reverse-sort", help="reverse order while sorting",
+        action="store_true")
 
     args = arg_parser.parse_args()
     if hasattr(args, "dir_path") and not args.disk:
