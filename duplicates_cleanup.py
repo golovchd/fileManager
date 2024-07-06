@@ -1,9 +1,9 @@
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from re import match
 from typing import Dict, List
 
-from regex import match
 from yaml import Loader, load
 
 DIR_CLEANUP_RULES = "dir-commons"
@@ -128,9 +128,13 @@ class DuplicatesCleanup:
                 if keep_index and keep_match and not delete_match:
                     break  # more than one matched rule
                 for group_name in rule["groups"]:
-                    matched_value = (keep_match.group(group_name)
-                                     if keep_match and not delete_match
-                                     else delete_match.group(group_name))
+                    if keep_match and not delete_match:
+                        matched_value = keep_match.group(group_name)
+                    elif delete_match:
+                        matched_value = delete_match.group(group_name)
+                    else:
+                        raise ValueError("Both keep_match and delete_match "
+                                         f"missing for {name}")
                     if not group_values[group_name]:
                         group_values[group_name] = matched_value
                     else:
