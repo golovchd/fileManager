@@ -8,6 +8,13 @@ storage-config:
     photos: "Data/Photos/! To Process/{{ year }}/{{ year }}-{{ month }}-{{ day }}"
     videos: "Data/Videos/! To Process/{{ year }}/{{ year }}-{{ month }}-{{ day }}"
     dashcam: "Data/Videos/! Dash Cam {{ number-plate }}/{{ year }}/{{ year }}-{{ month }}-{{ day }}"
+  skip-loctions:
+    photos:
+      - "Data/Photos/"
+    videos:
+      - "Data/Videos/"
+    dashcam:
+      - "Data/Videos/"
 media-config:
   - photo-disk:
     label: disk
