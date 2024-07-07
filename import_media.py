@@ -9,12 +9,12 @@ import re
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List
+from typing import Dict, List
 
 import exifread
 from yaml import Loader, load
 
-from file_utils import get_lsblk, get_mount_path
+from file_utils import convert_to_bytes, get_lsblk, get_mount_path
 from utils import float2timestamp, timeobj2exif_str
 
 _COMPARE_TIME_DIFF = timedelta(2)  # 2 days
@@ -130,6 +130,21 @@ class ImportConfig:
     def storage_regex_list(self) -> List[str]:
         return self.config.get("storage-config", {}).get(
                 "storage-includes", ["^not-a-disk$"])
+
+    @property
+    def free_space_limits(self) -> Dict[str, int]:
+        if "free-space-limit" not in self.config.get("storage-config", {}):
+            return {}
+        free_space_limits = {}
+        free_space_config = self.config["storage-config"]["free-space-limit"]
+        if "percentage" in free_space_config:
+            free_space_limits["percentage"] = int(
+                    free_space_config["percentage"])
+        if "absolute" in free_space_config:
+            free_space_limits["absolute"] = convert_to_bytes(
+                    free_space_config["absolute"])
+
+        return free_space_limits
 
 
 class MediaFilesIterator:
@@ -345,14 +360,37 @@ def print_time(path):
         logging.info(f"file_time({file_path})={read_file_time(file_path)}")
 
 
-def get_storages(storage_regex_list: List[str]) -> List[Path]:
+def have_enough_free_space(
+        storage_mount: str, free_space_limit: Dict[str, int]) -> bool:
+    """Checks if storage_mount comply to free_space_limit"""
+    if not free_space_limit:
+        logging.debug(f"No free space requirements for {storage_mount}")
+        return True
+    statvfs = os.statvfs(storage_mount)
+    user_free_space = statvfs.f_frsize * statvfs.f_bavail
+    percent_free_space = 100 * statvfs.f_bavail / statvfs.f_blocks
+    logging.debug(f"Free space for {storage_mount} {user_free_space}B, "
+                  f"{percent_free_space:.2n}%, limit {free_space_limit}")
+    match_absolute = (not free_space_limit.get("absolute") or
+                      user_free_space > free_space_limit["absolute"])
+    match_percentage = (not free_space_limit.get("percentage") or
+                        percent_free_space > free_space_limit["percentage"])
+    return match_absolute and match_percentage
+
+
+def get_storages(
+        storage_regex_list: List[str],
+        free_space_limit: Dict[str, int]) -> List[Path]:
+    """Returns currently mounted strages that comply to config"""
     logging.debug(f"storage_regex_list: {storage_regex_list}")
     return [
         Path(device_info["mountpoint"]) for device_info in get_lsblk()
-        if device_info["mountpoint"] and any(
-                re.match(storage_regex,
+        if (device_info["mountpoint"] and
+            any(re.match(storage_regex,
                          device_info["mountpoint"].split("/")[-1])
-                for storage_regex in storage_regex_list)
+                for storage_regex in storage_regex_list) and
+            have_enough_free_space(
+                    device_info["mountpoint"], free_space_limit))
     ]
 
 
@@ -360,7 +398,8 @@ def import_action(args: argparse.Namespace) -> int:
     """Implementation of import action."""
     config = ImportConfig(args.config)
     storages = ([get_mount_path(args.storage)]
-                if args.storage else get_storages(config.storage_regex_list))
+                if args.storage else get_storages(
+                        config.storage_regex_list, config.free_space_limits))
     if not storages:
         logging.critical("Failed to find storage location.")
         return 1

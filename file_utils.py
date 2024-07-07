@@ -3,6 +3,7 @@
 import hashlib
 import json
 import logging
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -10,6 +11,29 @@ from time import CLOCK_MONOTONIC, clock_gettime_ns
 from typing import Any, Dict, List, Tuple
 
 _IGNORED_DIRS = [".", "..", "$RECYCLE.BIN"]
+_KiB = 1024
+_KB = 1000
+_BYTES_SCALE = {
+        "B": 1,
+        "KiB": _KiB ** 1, "K": _KiB ** 1, "KB": _KB ** 1,
+        "MiB": _KiB ** 2, "M": _KiB ** 2, "MB": _KB ** 2,
+        "GiB": _KiB ** 3, "G": _KiB ** 3, "GB": _KB ** 3,
+        "TiB": _KiB ** 4, "T": _KiB ** 4, "TB": _KB ** 4,
+}
+_SIZE_REGEX = re.compile(
+        r"^(?P<number>(?P<int>\d+)(\.\d+|))(?P<scale>([KMGT]|)(i|)(B|))$"
+)
+
+
+def convert_to_bytes(size: str) -> int:
+    """Convert size designation into integer bytes value."""
+    match = re.match(_SIZE_REGEX, size)
+    if not match:
+        raise ValueError(f"{size} is not correct size designation")
+    print(match)
+    return (int(
+            float(match.group("number")) * _BYTES_SCALE[match.group("scale")])
+            if match.group("scale") else int(match.group("int")))
 
 
 def get_full_dir_path(path: Path) -> Path:
