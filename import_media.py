@@ -5,14 +5,20 @@
 import argparse
 import logging
 import os
+import re
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Dict, List
 
 import exifread
+from yaml import Loader, load
 
+from file_utils import convert_to_bytes, get_lsblk, get_mount_path
 from utils import float2timestamp, timeobj2exif_str
 
 _COMPARE_TIME_DIFF = timedelta(2)  # 2 days
+_DEFAULT_CONFIG = Path(__file__).absolute().parent / "import_config.yaml"
 
 
 class ExifTimeError(Exception):
@@ -114,6 +120,31 @@ def compare_files(file_name_1, dir_path_1, dir_path_2, file_name_2=None):
             f"second file {file_path_2} too old {timeobj2exif_str(mtime_2)}")
         return False
     return exif_time_1 == read_file_time(file_path_2)
+
+
+class ImportConfig:
+    def __init__(self, config_file: Path) -> None:
+        self.config = load(config_file.read_text("utf-8"), Loader=Loader)
+
+    @property
+    def storage_regex_list(self) -> List[str]:
+        return self.config.get("storage-config", {}).get(
+                "storage-includes", ["^not-a-disk$"])
+
+    @property
+    def free_space_limits(self) -> Dict[str, int]:
+        if "free-space-limit" not in self.config.get("storage-config", {}):
+            return {}
+        free_space_limits = {}
+        free_space_config = self.config["storage-config"]["free-space-limit"]
+        if "percentage" in free_space_config:
+            free_space_limits["percentage"] = int(
+                    free_space_config["percentage"])
+        if "absolute" in free_space_config:
+            free_space_limits["absolute"] = convert_to_bytes(
+                    free_space_config["absolute"])
+
+        return free_space_limits
 
 
 class MediaFilesIterator:
@@ -329,18 +360,61 @@ def print_time(path):
         logging.info(f"file_time({file_path})={read_file_time(file_path)}")
 
 
-def import_action(args):
+def have_enough_free_space(
+        storage_mount: str, free_space_limit: Dict[str, int]) -> bool:
+    """Checks if storage_mount comply to free_space_limit"""
+    if not free_space_limit:
+        logging.debug(f"No free space requirements for {storage_mount}")
+        return True
+    statvfs = os.statvfs(storage_mount)
+    user_free_space = statvfs.f_frsize * statvfs.f_bavail
+    percent_free_space = 100 * statvfs.f_bavail / statvfs.f_blocks
+    logging.debug(f"Free space for {storage_mount} {user_free_space}B, "
+                  f"{percent_free_space:.2n}%, limit {free_space_limit}")
+    match_absolute = (not free_space_limit.get("absolute") or
+                      user_free_space > free_space_limit["absolute"])
+    match_percentage = (not free_space_limit.get("percentage") or
+                        percent_free_space > free_space_limit["percentage"])
+    return match_absolute and match_percentage
+
+
+def get_storages(
+        storage_regex_list: List[str],
+        free_space_limit: Dict[str, int]) -> List[Path]:
+    """Returns currently mounted strages that comply to config"""
+    logging.debug(f"storage_regex_list: {storage_regex_list}")
+    return [
+        Path(device_info["mountpoint"]) for device_info in get_lsblk()
+        if (device_info["mountpoint"] and
+            any(re.match(storage_regex,
+                         device_info["mountpoint"].split("/")[-1])
+                for storage_regex in storage_regex_list) and
+            have_enough_free_space(
+                    device_info["mountpoint"], free_space_limit))
+    ]
+
+
+def import_action(args: argparse.Namespace) -> int:
     """Implementation of import action."""
-    if args.media is None or args.storage is None:
-        logging.critical(
-            "Import require both --media and --storage arguments.")
-        exit(1)
-    files_to_import = get_import_list(
-        args.media, args.storage, filter_storage=args.import_all)
+    config = ImportConfig(args.config)
+    storages = ([get_mount_path(args.storage)]
+                if args.storage else get_storages(
+                        config.storage_regex_list, config.free_space_limits))
+    if not storages:
+        logging.critical("Failed to find storage location.")
+        return 1
+    logging.debug(f"Discovered storages: {storages}")
+    if args.media is None:
+        logging.critical("Import require --media argument.")
+        return 1
+    for storage in storages:
+        files_to_import = get_import_list(
+            args.media, storage, filter_storage=args.import_all)
     logging.info(files_to_import)
+    return 0
 
 
-def print_time_action(args):
+def print_time_action(args: argparse.Namespace):
     """Implementation of print_time_action action."""
     if args.media is None and args.storage is None:
         logging.critical(
@@ -352,19 +426,20 @@ def print_time_action(args):
         print_time(args.storage)
 
 
-def main():
-    """Module as util use wrapper."""
+def parse_arguments(argv: List[str]) -> argparse.Namespace:
+    """Definiing and parsing arguments."""
     actions = [
         'import',
         'print_time',
     ]
     arg_parser = argparse.ArgumentParser(
         description='Import photos from media to storage')
+    arg_parser.add_argument('--config', type=Path, help='Path to config file',
+                            default=_DEFAULT_CONFIG)
     arg_parser.add_argument('--media', help='Media to import files from',
                             default=None)
-    arg_parser.add_argument(
-        '--storage', help='Storage to save imported media files',
-        default=None)
+    arg_parser.add_argument('--storage', type=Path, default=None,
+                            help='Storage to save imported media files')
     arg_parser.add_argument('--action', help='Action to perform',
                             choices=actions, default='import')
     arg_parser.add_argument(
@@ -377,15 +452,21 @@ def main():
     arg_parser.add_argument('--dry_run',
                             help='Print action instead of executing it',
                             action="store_true", default=False)
-    args = arg_parser.parse_args()
+    return arg_parser.parse_args(args=argv)
+
+
+def main(argv: List[str]) -> int:
+    """Module as util use wrapper."""
+    args = parse_arguments(argv)
     logging.basicConfig(
         format="%(asctime)s [%(levelname)s] %(message)s",
         level=logging.WARNING - 10 * (args.verbose if args.verbose < 3 else 2))
     if args.action == 'import':
-        import_action(args)
+        return import_action(args)
     elif args.action == 'print_time':
         print_time_action(args)
+    return 0
 
 
 if __name__ == '__main__':
-    main()
+    exit(main(sys.argv[1:]))

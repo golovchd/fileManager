@@ -9,9 +9,39 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 TEST_DATA_DIR = SCRIPT_DIR.parent / "test_data"
 sys.path.append(str(SCRIPT_DIR.parent))
 
-from file_utils import (generate_file_sha1, get_full_dir_path,  # noqa: E402
-                        get_mount_path, get_path_disk_info,
+from file_utils import (convert_to_bytes, generate_file_sha1,  # noqa: E402
+                        get_full_dir_path, get_mount_path, get_path_disk_info,
                         get_path_from_mount, read_dir, read_file)
+
+
+@pytest.mark.parametrize(
+    "designation, expected",
+    [
+        ("25KiB", 25 * 1024),
+        ("25K", 25 * 1024),
+        ("25.5", 25),
+        ("25.5B", 25),
+        ("25.5G", int(25.5 * 1024 ** 3)),
+        ("25.3GB", int(25.3 * 1000 ** 3)),
+        ("25.5KiB", int(25.5 * 1024)),
+        ("25.5TiB", int(25.5 * 1024 ** 4)),
+        ("25.5TB", int(25.5 * 1000 ** 4)),
+    ]
+)
+def test__success__convert_to_bytes(designation: str, expected: int) -> None:
+    assert convert_to_bytes(designation) == expected
+
+
+@pytest.mark.parametrize(
+    "designation",
+    [
+        "25ZiB",
+        "25,5",
+    ]
+)
+def test__failures__convert_to_bytes(designation: str) -> None:
+    with pytest.raises(ValueError):
+        convert_to_bytes(designation)
 
 
 def test_get_full_dir_path():
