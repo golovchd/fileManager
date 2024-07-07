@@ -1,6 +1,6 @@
 storage-config:
   storage-includes:
-    - ^DG-[1-9]\d*[MGT]B-(SSD)[1-9]\d*$
+    - ^DG-[1-9]\d*[MGT]B-(SSD|)[1-9]\d*$
   free-space-limit:
     absolute: 50GB
     percentage: 5

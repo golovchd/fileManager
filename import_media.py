@@ -364,11 +364,13 @@ def import_action(args: argparse.Namespace) -> int:
     if not storages:
         logging.critical("Failed to find storage location.")
         return 1
+    logging.debug(f"Discovered storages: {storages}")
     if args.media is None:
         logging.critical("Import require --media argument.")
         return 1
-    files_to_import = get_import_list(
-        args.media, args.storage, filter_storage=args.import_all)
+    for storage in storages:
+        files_to_import = get_import_list(
+            args.media, storage, filter_storage=args.import_all)
     logging.info(files_to_import)
     return 0
 
