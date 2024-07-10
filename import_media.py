@@ -7,9 +7,11 @@ import logging
 import os
 import re
 import sys
+from dataclasses import dataclass
 from datetime import datetime, timedelta
+from enum import Enum
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import exifread
 from yaml import Loader, load
@@ -122,6 +124,19 @@ def compare_files(file_name_1, dir_path_1, dir_path_2, file_name_2=None):
     return exif_time_1 == read_file_time(file_path_2)
 
 
+class MediaType(Enum):
+    PHOTOS = 1
+    VIDEOS = 2
+    DASHCAM = 3
+
+
+@dataclass
+class MediaConfig:
+    name: str
+    label: str
+    types: List[MediaType]
+
+
 class ImportConfig:
     def __init__(self, config_file: Path) -> None:
         self.config = load(config_file.read_text("utf-8"), Loader=Loader)
@@ -145,6 +160,17 @@ class ImportConfig:
                     free_space_config["absolute"])
 
         return free_space_limits
+
+    @property
+    def media_config(self) -> Dict[str, MediaConfig]:
+        if "media-config" not in self.config:
+            return {}
+        return {
+            details["label"]: MediaConfig(details["name"], details["label"],
+                                          [MediaType[str(media_type).upper()]
+                                           for media_type in details["types"]])
+            for details in self.config["media-config"]
+        }
 
 
 class MediaFilesIterator:
@@ -304,16 +330,18 @@ class MediaFiles:
         return copies_list if find_all else None
 
 
-def get_import_list(media_root, storage_root, filter_storage=True):
+def get_import_list(
+        media_root: Path, storage_root: Path, filter_storage: bool = True
+        ) -> Tuple[List[Path], Dict[str, Path]]:
     """Generating list of files to import.
 
       Collecting list of files with supported types from media_root and looking
       for not yet present in storage_root
 
       Args:
-        media_root: string, path to dir to import from
-        storage_root: string, path to destination dir
-        filter_storage: boolean,if True processing only MediaFiles.storage_dirs
+        media_root: path to dir to import from
+        storage_root: path to destination dir
+        filter_storage: if True processing only MediaFiles.storage_dirs
       Returns:
         Tuple, list of files from media_root tree not found in storage_root and
         dictionary with files from media_root as keys and their matches in
@@ -321,8 +349,8 @@ def get_import_list(media_root, storage_root, filter_storage=True):
     """
     media = MediaFiles(media_root)
     media.import_media()
-    already_imported_files = {}
-    not_imported_files = []
+    already_imported_files: Dict[str, Path] = {}
+    not_imported_files: List[Path] = []
     logging.info(f"{media_root} contain {media.count} files")
     if not media.count:
         return (not_imported_files, already_imported_files)
@@ -387,11 +415,23 @@ def get_storages(
         Path(device_info["mountpoint"]) for device_info in get_lsblk()
         if (device_info["mountpoint"] and
             any(re.match(storage_regex,
-                         device_info["mountpoint"].split("/")[-1])
+                         Path(device_info["mountpoint"]).name)
                 for storage_regex in storage_regex_list) and
             have_enough_free_space(
                     device_info["mountpoint"], free_space_limit))
     ]
+
+
+def get_media_list(
+        media_config: Dict[str, MediaConfig]) -> Dict[Path, MediaConfig]:
+    logging.debug(media_config)
+    return {
+        Path(device_info["mountpoint"]):
+            media_config[Path(device_info["mountpoint"]).name]
+            for device_info in get_lsblk()
+            if (device_info["mountpoint"] and
+                Path(device_info["mountpoint"]).name in media_config)
+    }
 
 
 def import_action(args: argparse.Namespace) -> int:
@@ -404,12 +444,18 @@ def import_action(args: argparse.Namespace) -> int:
         logging.critical("Failed to find storage location.")
         return 1
     logging.debug(f"Discovered storages: {storages}")
-    if args.media is None:
-        logging.critical("Import require --media argument.")
+    media_list = ({args.media.absolute(): MediaConfig(
+                    "manual", "manual", list(MediaType))}
+                  if args.media else get_media_list(config.media_config))
+    logging.debug(f"Discovered medias: {media_list}")
+    if not media_list:
+        logging.critical("Failed to find media location.")
         return 1
     for storage in storages:
-        files_to_import = get_import_list(
-            args.media, storage, filter_storage=args.import_all)
+        files_to_import: List[Path] = []
+        for media in media_list:
+            files_to_import.extend(get_import_list(
+                media, storage, filter_storage=args.import_all)[0])
     logging.info(files_to_import)
     return 0
 
@@ -436,8 +482,8 @@ def parse_arguments(argv: List[str]) -> argparse.Namespace:
         description='Import photos from media to storage')
     arg_parser.add_argument('--config', type=Path, help='Path to config file',
                             default=_DEFAULT_CONFIG)
-    arg_parser.add_argument('--media', help='Media to import files from',
-                            default=None)
+    arg_parser.add_argument('--media', type=Path, default=None,
+                            help='Media to import files from')
     arg_parser.add_argument('--storage', type=Path, default=None,
                             help='Storage to save imported media files')
     arg_parser.add_argument('--action', help='Action to perform',

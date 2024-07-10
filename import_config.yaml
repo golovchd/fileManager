@@ -8,7 +8,7 @@ storage-config:
     photos: "Data/Photos/! To Process/{{ year }}/{{ year }}-{{ month }}-{{ day }}"
     videos: "Data/Videos/! To Process/{{ year }}/{{ year }}-{{ month }}-{{ day }}"
     dashcam: "Data/Videos/! Dash Cam {{ number-plate }}/{{ year }}/{{ year }}-{{ month }}-{{ day }}"
-  skip-loctions:
+  skip-locations:
     photos:
       - "Data/Photos/"
     videos:
@@ -16,17 +16,17 @@ storage-config:
     dashcam:
       - "Data/Videos/"
 media-config:
-  - photo-disk:
+  - name: photo-disk
     label: disk
     types:
       - photos
       - videos
-  - sony-7Rm5:
+  - name: sony-7Rm5
     label: 546A-BC38
     types:
       - photos
       - videos
-  - dahscam:
+  - name: dahscam
     label: dahscam
     types:
       - dashcam
