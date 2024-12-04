@@ -1,0 +1,43 @@
+storage-config:
+  storage-includes:
+    - ^DG-[1-9]\d*[MGT]B-(SSD|)[1-9]\d*$
+  free-space-limit:
+    absolute: 50GB
+    percentage: 5
+  import-locations:
+    photos: "Data/Photos/! To Process/{{ year }}/{{ year }}-{{ month }}-{{ day }}"
+    videos: "Data/Videos/! To Process/{{ year }}/{{ year }}-{{ month }}-{{ day }}"
+    dashcam: "Data/Videos/! Dash Cam {{ number-plate }}/{{ year }}/{{ year }}-{{ month }}-{{ day }}"
+  skip-locations:
+    photos:
+      - "Data/Photos/"
+    videos:
+      - "Data/Videos/"
+    dashcam:
+      - "Data/Videos/"
+media-config:
+  - name: photo-disk
+    label: disk
+    types:
+      - photos
+      - videos
+  - name: sony-7Rm5
+    label: 546A-BC38
+    types:
+      - photos
+      - videos
+  - name: dahscam
+    label: dahscam
+    types:
+      - dashcam
+import-types:
+  - photos:
+    extensions:
+      - ^.+\.(JPG|ARW|jpg)$
+    date-from-exif: true
+  - videos:
+    extensions:
+      - ^.+\.(MTS|CPI|LRV|MP4|MOV|AVI|mp4|LIK|3gp)$
+  - dahscam:
+    extensions:
+      - ^.+\.(MOV|MP4|mp4)$
