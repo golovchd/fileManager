@@ -297,9 +297,13 @@ def list_disks_command(file_db: FileUtils, args: argparse.Namespace) -> int:
 
 def list_dir_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     """Listing directory."""
-    file_db.list_dir(
-        args.disk, args.dir_path, args.recursive, summary=args.summary)
-    return 0
+    try:
+        file_db.list_dir(
+            args.disk, args.dir_path, args.recursive, summary=args.summary)
+        return 0
+    except ValueError:
+        print(f"Failed to find dir path {args.dir_path} on drive {args.disk}")
+        return 1
 
 
 def move_command(file_db: FileUtils, args: argparse.Namespace) -> int:
