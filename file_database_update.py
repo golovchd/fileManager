@@ -31,9 +31,10 @@ class FileDatabaseUpdater(FileManagerDatabase):
         file_name, file_type, size, mtime, sha1, hash_time = (
             file_utils.read_file(file_path, True))
         if not sha1:
-            logging.warning(f"Failed to get SHA1 for {file_full_name}, "
-                            f"SHA1 in DB {db_file_sha1}, skipped update of "
-                            f"fsrecord_id={fsrecord_id}")
+            if fsrecord_id:
+                logging.warning(f"Failed to get SHA1 for {file_full_name}, "
+                                f"SHA1 in DB {db_file_sha1}, skipped update "
+                                f"of fsrecord_id={fsrecord_id}")
             return 0, size, 0   # Skip file if unable to read
 
         logging.debug(f"Update fsrecord {fsrecord_id} from {file_path}, "
