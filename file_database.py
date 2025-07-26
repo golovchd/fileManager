@@ -360,3 +360,14 @@ class FileManagerDatabase(SQLite3connection):
                 _FSFILE_INSERT,
                 (file_name, self._cur_dir_id, self._disk_id, mtime, file_id,
                  time()))
+
+    def get_path_on_disk(self, disk: str, path: str) -> int:
+        self.set_disk_by_name(disk)
+        dir_id = self.get_dir_id(path.split('/'), insert_dirs=False)
+        logging.debug("Found dir {path} with ID {dir_id} on disk {disk}")
+        return dir_id
+
+    def path_redundancy(self, disks: List[str], path: str) -> None:
+        logging.info(f"Calculating redundancy of {path} on disks {','.join(disks)}")
+        path_id = { disk: self.get_path_on_disk(disk, path) for disk in disks}
+        logging.debug(path_id)

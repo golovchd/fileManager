@@ -325,6 +325,10 @@ def unique_files_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     return 0
 
 
+def path_redundancy_command(file_db: FileUtils, args: argparse.Namespace) -> int:
+    file_db.path_redundancy(args.disks, args.path)
+    return 0
+
 def parse_arguments() -> argparse.Namespace:
     """CLI arguments parser."""
     arg_parser = argparse.ArgumentParser(
@@ -399,9 +403,21 @@ def parse_arguments() -> argparse.Namespace:
         "--sort", help="Sort output", choices=_SORT_OPTIONS_UNIQUE,
         default=_SORT_OPTIONS_UNIQUE[0])
 
+    path_redundancy = subparsers.add_parser(
+        "path-redundancy", help="Calculate redundancy of specific path")
+    path_redundancy.set_defaults(func=path_redundancy_command, cmd_name="path-redundancy")
+    path_redundancy.add_argument(
+        "--disks", help="Disks to include, at least 2 disks required", type=str, nargs="+", required=True)
+    path_redundancy.add_argument(
+        "--path", help="Directory path to include", type=str, required=True)
+
     args = arg_parser.parse_args()
     if args.cmd_name in disk_required and not args.disk:
         arg_parser.error(f"-d DISK argument is required for {args.cmd_name}")
+
+    if args.cmd_name == "path-redundancy" and len(args.disks) < 2:
+        arg_parser.error(f"--disks DISK1,DISK2,... argument is require at least 2 disks for {args.cmd_name}")
+
     return args
 
 
