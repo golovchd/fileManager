@@ -235,9 +235,9 @@ class FileUtils(FileManagerDatabase):
         self.set_disk_by_name(disk)
         if not disk_index:
             # Dict of file_id and list of disks that have it
-            logging.info("Inited self._baseline_file_disks")
+            logging.debug("Inited self._baseline_file_disks")
             self._baseline_file_disks: Dict[str, List[str]] = {}
-        logging.info(
+        logging.debug(
             f"Collecting unique files from disk {self.disk_name} dir_id={dir_id}, disk_index={disk_index}")
         files_count = 0
         dir_size = 0
@@ -268,10 +268,10 @@ class FileUtils(FileManagerDatabase):
                 if disk_index:
                     new_files_count += 1
                     new_files_size += int(row[5])
-                    logging.info(f"New file: {self.disk_name}/{self.get_path(cur_dir_id)}/{row[1]}")
+                    logging.debug(f"New file: {self.disk_name}/{self.get_path(cur_dir_id)}/{row[1]}")
 
-        logging.info(f"Disk {disk} under dir_id {dir_id} have {files_count} unique files, size {dir_size} in {subdirs_count} subdirs, baseline count = {baseline_files_count}, size = {baseline_files_size}")
-        logging.info(f"Size of self._baseline_file_disks {len(self._baseline_file_disks)}")
+        logging.debug(f"Disk {disk} under dir_id {dir_id} have {files_count} unique files, size {dir_size} in {subdirs_count} subdirs, baseline count = {baseline_files_count}, size = {baseline_files_size}")
+        logging.debug(f"Size of self._baseline_file_disks {len(self._baseline_file_disks)}")
         if disk_index:
             logging.info(f"Disk {disk} under dir_id {dir_id} have {new_files_count} new unique files, size {new_files_size}")
         return (files_count, dir_size, new_files_count, new_files_size)
@@ -286,10 +286,10 @@ class FileUtils(FileManagerDatabase):
             disk_status[disk] = self.get_unique_files(disk, dir_id, disk_index)
             disk_index += 1
         limited_files_id = [file_id for file_id, disk_list in self._baseline_file_disks.items() if len(disk_list) <= files_count_limit]
-        logging.info(f"{len(limited_files_id)} files have less copies then {files_count_limit} on disks {','.join(disks)}")
         for disk_label, file_path_list in self.get_file_path_on_disk(limited_files_id, disks, parent_root_path=path).items():
             for file_path in file_path_list:
                 logging.info(f"File {file_path} only present on disk {disk_label}")
+        logging.info(f"{len(limited_files_id)} files have less copies then {files_count_limit} on disks {','.join(disks)}")
 
     def move_fs_item(
             self, disk: str, src: str, dst: str, dry_run: bool) -> int:
