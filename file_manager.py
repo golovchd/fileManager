@@ -142,7 +142,7 @@ class FileUtils(FileManagerDatabase):
         disk_info = get_disk_info(disks_list[0][1])
         self._exec_query(
             _DISK_UPDATE_SIZE,
-            (int(disk_info["fssize"]) // 1024,
+            (int(disk_info.get("fssize", disk_info.get("size", 0))) // 1024,
              disk_info["label"],
              disks_list[0][0]),
             commit=True)
