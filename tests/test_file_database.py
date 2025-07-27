@@ -2,7 +2,7 @@ import sqlite3
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import pytest
 
@@ -136,3 +136,22 @@ def test_query_subdirs(
     with FileManagerDatabase(reference_db_path, time.time()) as db:
         db.set_disk("0a2e2cb7-4543-43b3-a04a-40959889bd45", 59609420, "")
         assert db.query_subdirs(dir, recursive) == subdirs
+
+
+@pytest.mark.parametrize(
+    "file_id, disks, parent_root_path, expected_result",
+    [
+        (["2", "7"], ["0a2e2cb7-4543-43b3-a04a-40959889bd45"], None, {"": [
+                "home/dimagolov/git/fileManager/test_data/media/DSC06979.JPG",
+                "home/dimagolov/git/fileManager/test_data/storage/DSC06979 (copy).JPG",
+                "home/dimagolov/git/fileManager/test_data/storage/DSC06979.JPG",
+                "home/dimagolov/git/fileManager/test_data/storage/DSC06979c.JPG",
+        ]}),
+    ]
+)
+def test_get_file_path_on_disk(tmp_path: Path, file_id: List[str], disks: List[str], parent_root_path: Optional[str], expected_result: Dict[str, List[str]]) -> None:
+    reference_db_path = tmp_path / _TEST_DB_NAME
+    create_db(reference_db_path, _DB_TEST_DB_DUMP)
+    with FileManagerDatabase(reference_db_path, time.time()) as db:
+        db.set_disk("0a2e2cb7-4543-43b3-a04a-40959889bd45", 59609420, "")
+        assert db.get_file_path_on_disk(file_id, disks, parent_root_path=parent_root_path) == expected_result
