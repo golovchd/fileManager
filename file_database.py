@@ -10,10 +10,10 @@ from db_utils import SQLite3connection
 from utils import timestamp2exif_str
 
 DEFAULT_DATABASE = Path("/var/lib/file-manager/fileManager.db")
-
+_DISK_SIZE_DIFF_LIMIT = 0.005
 
 _DISK_SELECT = ("SELECT `ROWID`, `UUID`, `DiskSize`, `Label`"
-                " FROM `disks` WHERE `UUID` = ? OR `Label` = ?")
+                " FROM `disks` WHERE `UUID` IN (?{}) OR `Label` IN (?{})")
 _DISK_INSERT = ("INSERT INTO `disks` (`UUID`, `DiskSize`, `Label`) "
                 "VALUES (?, ?, ?)")
 
@@ -67,6 +67,12 @@ _FS_FILE_SELECT = ("SELECT `fsrecords`.`ROWID`, `fsrecords`.`SHA1ReadDate`, "
                    " ON `files`.`ROWID` = `fsrecords`.`FileId`"
                    " WHERE `DiskId` = ? AND `ParentId` = ? AND `Name` = ?"
                    " AND `FileId` IS NOT NULL")
+_FILE_ON_DISK_SELECT = ("SELECT `fsrecords`.`ROWID`, `fsrecords`.`SHA1ReadDate`, "
+                        "`fsrecords`.`FileDate`, `ParentId`, "
+                        "`files`.`FileSize`, `SHA1`"
+                        "FROM `fsrecords` INNER JOIN `files` "
+                        "ON `files`.`ROWID` = `fsrecords`.`FileId` "
+                        "WHERE `DiskId` = ? AND `FileId` IN(?{})")
 _SELECT_SUBDIRS = ("SELECT `ROWID`, `Name`, `ParentId` FROM `fsrecords` "
                    "WHERE `ParentId` IN(?{}) AND `FileId` IS NULL "
                    "ORDER BY `ParentId`, `Name`")
@@ -148,12 +154,15 @@ class FileManagerDatabase(SQLite3connection):
                 tuple(orfans_list), commit=True)
         return orfans_count
 
+    def _query_disks(self, names: List[str]) -> List[List[str]]:
+        return  self._exec_query(_DISK_SELECT.format(",?" * (len(names) - 1), ",?" * (len(names) - 1)), (*names, *names), commit=False)
+
     def set_disk(self, uuid: str, size: int, label: str) -> None:
         """Create/update disk details in DB."""
-        for row in self._exec_query(_DISK_SELECT, (uuid, uuid), commit=False):
-            self._set_disk(row[0], row[1], size, label)
+        for row in self._query_disks([uuid, uuid]):
+            self._set_disk(int(row[0]), row[1], int(size), label)
             # TODO: support free disk space tracking in DB
-            if row[2] != size or row[3] != label:
+            if abs(float(row[2]) / float(size) - 1) > _DISK_SIZE_DIFF_LIMIT or row[3] != label:
                 logging.error("Size or label of disk UUID %s changed: "
                               "%d -> %d, %s -> %s",
                               uuid, row[2], size, row[3], label)
@@ -166,8 +175,8 @@ class FileManagerDatabase(SQLite3connection):
             self.set_disk(uuid, size, label)
 
     def set_disk_by_name(self, name: str) -> None:
-        for row in self._exec_query(_DISK_SELECT, (name, name), commit=False):
-            self._set_disk(row[0], row[1], row[2], row[3])
+        for row in self._query_disks([name]):
+            self._set_disk(int(row[0]), row[1], int(row[2]), row[3])
             self.set_top_dir()
             break
         else:
@@ -270,6 +279,16 @@ class FileManagerDatabase(SQLite3connection):
         self._save_path_cache(fsrecord_id, fsrecord_path)
         return fsrecord_path
 
+    def get_file_path_on_disk(self, file_id: List[str], disks: List[str], parent_root_path: Optional[str]= None) -> Dict[str, List[str]]:
+        """Return path on disk of specific file_id."""
+        disk_labels = {row[0]: row[3] for row in self._query_disks(disks)}
+        path_on_disk: Dict[str, List[str]] = {disk_label: [] for disk_label in disk_labels.values()}
+        for disk_id, disk_label in disk_labels.items():
+            all_path_on_disk = [self.get_path(row[0]) for row in
+            self._exec_query(_FILE_ON_DISK_SELECT.format(",?" * (len(file_id) - 1)), (disk_id, *file_id), commit=False)]
+            path_on_disk[disk_label].extend([path for path in all_path_on_disk if not parent_root_path or path.startswith(f"{parent_root_path}/")])
+        return path_on_disk
+
     def query_subdirs(self, dir: int, recursively: bool = False) -> List[int]:
         """Queries files of given pair of dirs."""
         subdirs = []
@@ -366,8 +385,3 @@ class FileManagerDatabase(SQLite3connection):
         dir_id = self.get_dir_id(path.split('/'), insert_dirs=False)
         logging.debug("Found dir {path} with ID {dir_id} on disk {disk}")
         return dir_id
-
-    def path_redundancy(self, disks: List[str], path: str) -> None:
-        logging.info(f"Calculating redundancy of {path} on disks {','.join(disks)}")
-        path_id = { disk: self.get_path_on_disk(disk, path) for disk in disks}
-        logging.debug(path_id)

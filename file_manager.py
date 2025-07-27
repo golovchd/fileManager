@@ -4,7 +4,7 @@ import argparse
 import logging
 from pathlib import Path
 from shutil import move
-from typing import Callable, List, Tuple
+from typing import Callable, Dict, List, Tuple
 
 from file_database import DEFAULT_DATABASE, FileManagerDatabase
 from file_utils import get_disk_info
@@ -223,6 +223,73 @@ class FileUtils(FileManagerDatabase):
             print(f"Size of files in {dir_path} with subdirs is {dir_size} B, "
                   f"contains {files_count} files and {subdir_count} subdirs")
         return dir_size, files_count, subdir_count
+
+    def get_unique_files(self, disk: str, dir_id: int, disk_index: int) -> Tuple[int, int, int, int]:
+        """Generates dictionary self._baseline_file_disks of unique files under provided dir_id
+            Returned elements:
+            - Number of unique files under dir_id on current disk
+            - Total size of unique files under dir_id on current disk
+            - Number of new unique files added to baseline dictionary, 0 for disk with index 0
+            - Total size of unique files added to baseline dictionary, 0 for disk with index 0
+        """
+        self.set_disk_by_name(disk)
+        if not disk_index:
+            # Dict of file_id and list of disks that have it
+            logging.info("Inited self._baseline_file_disks")
+            self._baseline_file_disks: Dict[str, List[str]] = {}
+        logging.info(
+            f"Collecting unique files from disk {self.disk_name} dir_id={dir_id}, disk_index={disk_index}")
+        files_count = 0
+        dir_size = 0
+        new_files_count = 0
+        new_files_size = 0
+        subdirs = [dir_id]
+        subdirs_count = 0
+        baseline_files_count = 0
+        baseline_files_size = 0
+        while subdirs:
+            cur_dir_id = subdirs.pop()
+            for row in self._exec_query(
+                    _DIR_LIST_SELECT, (cur_dir_id,), commit=False):
+                if not row[5]:  # element is a dir
+                    subdirs_count += 1
+                    subdirs.append(row[0])
+                    continue
+
+                if row[4] in self._baseline_file_disks and disk not in self._baseline_file_disks[row[4]]:
+                    self._baseline_file_disks[row[4]].append(disk)
+                    baseline_files_count += 1
+                    baseline_files_size += int(row[5])
+                    continue
+
+                self._baseline_file_disks[row[4]] = [disk]
+                files_count += 1
+                dir_size += int(row[5])
+                if disk_index:
+                    new_files_count += 1
+                    new_files_size += int(row[5])
+                    logging.info(f"New file: {self.disk_name}/{self.get_path(cur_dir_id)}/{row[1]}")
+
+        logging.info(f"Disk {disk} under dir_id {dir_id} have {files_count} unique files, size {dir_size} in {subdirs_count} subdirs, baseline count = {baseline_files_count}, size = {baseline_files_size}")
+        logging.info(f"Size of self._baseline_file_disks {len(self._baseline_file_disks)}")
+        if disk_index:
+            logging.info(f"Disk {disk} under dir_id {dir_id} have {new_files_count} new unique files, size {new_files_size}")
+        return (files_count, dir_size, new_files_count, new_files_size)
+
+    def path_redundancy(self, disks: List[str], path: str, files_count_limit: int=1) -> None:
+        logging.info(f"Calculating redundancy of {path} on disks {','.join(disks)}")
+        path_id = { disk: self.get_path_on_disk(disk, path) for disk in disks}
+        logging.debug(path_id)
+        disk_index = 0
+        disk_status = {}
+        for disk, dir_id in path_id.items():
+            disk_status[disk] = self.get_unique_files(disk, dir_id, disk_index)
+            disk_index += 1
+        limited_files_id = [file_id for file_id, disk_list in self._baseline_file_disks.items() if len(disk_list) <= files_count_limit]
+        logging.info(f"{len(limited_files_id)} files have less copies then {files_count_limit} on disks {','.join(disks)}")
+        for disk_label, file_path_list in self.get_file_path_on_disk(limited_files_id, disks, parent_root_path=path).items():
+            for file_path in file_path_list:
+                logging.info(f"File {file_path} only present on disk {disk_label}")
 
     def move_fs_item(
             self, disk: str, src: str, dst: str, dry_run: bool) -> int:
