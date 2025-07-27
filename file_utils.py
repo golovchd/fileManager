@@ -60,7 +60,7 @@ def get_path_disk_info(dir_path: Path) -> Dict[str, Any]:
         if device_info["mountpoint"] == mount_path:
             return {
                 "uuid": device_info["uuid"],
-                "size": int(device_info["size"]) // 1024,
+                "size": int(device_info.get("fssize", device_info.get("size", 0))) // 1024,
                 "label": device_info["label"] or "",
             }
     raise ValueError(f"Failed to locate device for path {dir_path}")
