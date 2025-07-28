@@ -148,6 +148,7 @@ def test_query_subdirs(
                 "home/dimagolov/git/fileManager/test_data/storage/DSC06979.JPG",
                 "home/dimagolov/git/fileManager/test_data/storage/DSC06979c.JPG",
         ]}),
+        ([], ["0a2e2cb7-4543-43b3-a04a-40959889bd45"], None, {})
     ]
 )
 def test_get_file_path_on_disk(tmp_path: Path, file_id: List[str], disks: List[str], parent_root_path: Optional[str], expected_result: Dict[str, List[str]]) -> None:

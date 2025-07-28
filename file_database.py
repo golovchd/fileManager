@@ -281,6 +281,8 @@ class FileManagerDatabase(SQLite3connection):
 
     def get_file_path_on_disk(self, file_id: List[str], disks: List[str], parent_root_path: Optional[str]= None) -> Dict[str, List[str]]:
         """Return path on disk of specific file_id."""
+        if not file_id:
+            return {}
         disk_labels = {row[0]: row[3] for row in self._query_disks(disks)}
         path_on_disk: Dict[str, List[str]] = {disk_label: [] for disk_label in disk_labels.values()}
         for disk_id, disk_label in disk_labels.items():

@@ -256,10 +256,11 @@ class FileUtils(FileManagerDatabase):
                     subdirs.append(row[0])
                     continue
 
-                if row[4] in self._baseline_file_disks and disk not in self._baseline_file_disks[row[4]]:
-                    self._baseline_file_disks[row[4]].append(disk)
-                    baseline_files_count += 1
-                    baseline_files_size += int(row[5])
+                if row[4] in self._baseline_file_disks:
+                    if disk not in self._baseline_file_disks[row[4]]:
+                        self._baseline_file_disks[row[4]].append(disk)
+                        baseline_files_count += 1
+                        baseline_files_size += int(row[5])
                     continue
 
                 self._baseline_file_disks[row[4]] = [disk]
