@@ -179,3 +179,17 @@ def test_failure_set_disk_by_name(tmp_path: Path) -> None:
     with FileManagerDatabase(reference_db_path, time.time()) as db:
         with pytest.raises(ValueError):
             db.set_disk_by_name("NO-SUCH-DISK")
+
+
+@pytest.mark.parametrize(
+    "path, dir_id",
+    [
+        ("home/dimagolov/git/fileManager/test_data/media", 7),
+        ("home/dimagolov/git/fileManager/test_data/storage", 14),
+    ]
+)
+def test_get_path_on_disk(tmp_path: Path, path: str, dir_id: int) -> None:
+    reference_db_path = tmp_path / _TEST_DB_NAME
+    create_db(reference_db_path, _DB_TEST_DB_1)
+    with FileManagerDatabase(reference_db_path, time.time()) as db:
+        assert db.get_path_on_disk("0a2e2cb7-4543-43b3-a04a-40959889bd45", path) == dir_id
