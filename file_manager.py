@@ -180,7 +180,7 @@ class FileUtils(FileManagerDatabase):
 
     def list_dir(
                 self, disk: str, dir_path: str, recursive: bool,
-                summary: bool = False, only_count: bool = False
+                summary: bool = False, only_count: bool = False, print_sha: bool = False
             ) -> Tuple[int, int, int]:
         self.set_disk_by_name(disk)
         self._cur_dir_id = self.get_dir_id(
@@ -201,7 +201,7 @@ class FileUtils(FileManagerDatabase):
                 subdir_count += 1
 
         if not (summary or only_count):
-            print_dir_content(dir_path, dir_content)
+            print_dir_content(dir_path, dir_content, print_sha)
 
         if not only_count and (not recursive or subdir_count and not summary):
             suffix = " (not counted)" if subdir_count else ""
@@ -272,8 +272,10 @@ class FileUtils(FileManagerDatabase):
         return 0
 
 
-def print_dir_content(dir_path: str, dir_content: List[List[str]]) -> None:
-    headers = ["Name", "Size", "File Date", "Hash Date, SHA256"]
+def print_dir_content(dir_path: str, dir_content: List[List[str]], print_sha: bool) -> None:
+    headers = ["Name", "Size", "File Date", "Hash Date"]
+    if print_sha:
+        headers.append("SHA1")
     indexes = [1, 5, 2, 3, 6]
     formats: List[Callable] = [
         str,
@@ -299,7 +301,7 @@ def list_dir_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     """Listing directory."""
     try:
         file_db.list_dir(
-            args.disk, args.dir_path, args.recursive, summary=args.summary)
+            args.disk, args.dir_path, args.recursive, summary=args.summary, print_sha=args.print_sha)
         return 0
     except ValueError:
         print(f"Failed to find dir path {args.dir_path} on drive {args.disk}")
@@ -375,8 +377,11 @@ def parse_arguments() -> argparse.Namespace:
     list_dir.add_argument("dir_path", type=str, help="Path to dir to list")
     list_dir.add_argument(
         "-r", "--recursive", help="List dir recursively", action="store_true")
-    list_dir.add_argument(
+    output_format = list_dir.add_mutually_exclusive_group()
+    output_format.add_argument(
         "-s", "--summary", help="Print only summary", action="store_true")
+    output_format.add_argument(
+        "-p", "--print-sha", help="Print SHA for each file", action="store_true")
 
     move_object = subparsers.add_parser(
         "move", help="Move dir, update DB accordingly")
