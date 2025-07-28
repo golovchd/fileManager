@@ -2,7 +2,7 @@ import sqlite3
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import pytest
 
@@ -14,6 +14,7 @@ from db_utils import TABLE_SELECT, create_db  # noqa: E402
 from file_database import FileManagerDatabase  # noqa: E402
 
 _DB_TEST_DB_DUMP = SCRIPT_DIR.parent / "fileManager_test_dump.sql"
+_DB_TEST_DB_1 = SCRIPT_DIR.parent / "fileManager_test_1.sql"
 _TEST_DB_NAME = "test.db"
 
 
@@ -136,3 +137,60 @@ def test_query_subdirs(
     with FileManagerDatabase(reference_db_path, time.time()) as db:
         db.set_disk("0a2e2cb7-4543-43b3-a04a-40959889bd45", 59609420, "")
         assert db.query_subdirs(dir, recursive) == subdirs
+
+
+@pytest.mark.parametrize(
+    "file_id, disks, parent_root_path, expected_result",
+    [
+        (["2", "7"], ["0a2e2cb7-4543-43b3-a04a-40959889bd45"], None, {"": [
+                "home/dimagolov/git/fileManager/test_data/media/DSC06979.JPG",
+                "home/dimagolov/git/fileManager/test_data/storage/DSC06979 (copy).JPG",
+                "home/dimagolov/git/fileManager/test_data/storage/DSC06979.JPG",
+                "home/dimagolov/git/fileManager/test_data/storage/DSC06979c.JPG",
+        ]}),
+        ([], ["0a2e2cb7-4543-43b3-a04a-40959889bd45"], None, {})
+    ]
+)
+def test_get_file_path_on_disk(tmp_path: Path, file_id: List[str], disks: List[str], parent_root_path: Optional[str], expected_result: Dict[str, List[str]]) -> None:
+    reference_db_path = tmp_path / _TEST_DB_NAME
+    create_db(reference_db_path, _DB_TEST_DB_DUMP)
+    with FileManagerDatabase(reference_db_path, time.time()) as db:
+        db.set_disk("0a2e2cb7-4543-43b3-a04a-40959889bd45", 59609420, "")
+        assert db.get_file_path_on_disk(file_id, disks, parent_root_path=parent_root_path) == expected_result
+
+
+@pytest.mark.parametrize(
+    "disk_name, disk_id",
+    [
+        ("0a2e2cb7-4543-43b3-a04a-40959889bd45", 1),
+        ("DG-5TB-4", 2),
+        ("61BB-02E2", 2),
+    ]
+)
+def test_set_disk_by_name(tmp_path: Path, disk_name: str, disk_id: int) -> None:
+    reference_db_path = tmp_path / _TEST_DB_NAME
+    create_db(reference_db_path, _DB_TEST_DB_1)
+    with FileManagerDatabase(reference_db_path, time.time()) as db:
+        db.set_disk_by_name(disk_name)
+        assert db._disk_id == disk_id
+
+def test_failure_set_disk_by_name(tmp_path: Path) -> None:
+    reference_db_path = tmp_path / _TEST_DB_NAME
+    create_db(reference_db_path, _DB_TEST_DB_1)
+    with FileManagerDatabase(reference_db_path, time.time()) as db:
+        with pytest.raises(ValueError):
+            db.set_disk_by_name("NO-SUCH-DISK")
+
+
+@pytest.mark.parametrize(
+    "path, dir_id",
+    [
+        ("home/dimagolov/git/fileManager/test_data/media", 7),
+        ("home/dimagolov/git/fileManager/test_data/storage", 14),
+    ]
+)
+def test_get_path_on_disk(tmp_path: Path, path: str, dir_id: int) -> None:
+    reference_db_path = tmp_path / _TEST_DB_NAME
+    create_db(reference_db_path, _DB_TEST_DB_1)
+    with FileManagerDatabase(reference_db_path, time.time()) as db:
+        assert db.get_path_on_disk("0a2e2cb7-4543-43b3-a04a-40959889bd45", path) == dir_id
