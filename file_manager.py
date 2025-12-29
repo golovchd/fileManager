@@ -475,6 +475,18 @@ def parse_arguments() -> argparse.Namespace:
     unique_files.add_argument(
         "--sort", help="Sort output", choices=_SORT_OPTIONS_UNIQUE,
         default=_SORT_OPTIONS_UNIQUE[0])
+    unique_files.add_argument(
+        "-c", "--count-limit",
+        help="Max number of file's backups to select, default 1",
+        type=int, default=1)
+    unique_files.add_argument(
+        "-i", "--include-path",
+        help="List of path to include",
+        type=str, nargs='*')
+    unique_files.add_argument(
+        "-e", "--exclude-path",
+        help="List of path to exclude",
+        type=str, nargs='*')
 
     path_redundancy = subparsers.add_parser(
         "path-redundancy", help="Calculate redundancy of specific path")
