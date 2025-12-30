@@ -198,15 +198,17 @@ def test_get_path_on_disk(tmp_path: Path, path: str, dir_id: int) -> None:
 
 
 @pytest.mark.parametrize(
-    "disk_name, result",
+    "disk_name, confirm, result",
     [
-        ("0a2e2cb7-4543-43b3-a04a-40959889bd45", 0),
-        ("DG-5TB-4", 1),
-        ("DG-5TB-4x", 1),
-        ("61BB-02E2", 0),
+        ("0a2e2cb7-4543-43b3-a04a-40959889bd45", True, 0),
+        ("DG-5TB-4", True, 2),
+        ("DG-5TB-4x", True, 1),
+        ("61BB-02E2", True, 0),
+        ("61BB-02E2", False, 3),
     ]
 )
-def test_delete_disk_errors(tmp_path: Path, disk_name: str, result: int) -> None:
+def test_delete_disk_errors(tmp_path: Path, mocker, disk_name: str, confirm: bool, result: int) -> None:
+    mocker.patch('file_database.file_utils.get_confirmation', lambda x,y: confirm)
     reference_db_path = tmp_path / _TEST_DB_NAME
     create_db(reference_db_path, _DB_TEST_DB_1)
     with FileManagerDatabase(reference_db_path, time.time()) as db:

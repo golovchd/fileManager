@@ -9,8 +9,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 TEST_DATA_DIR = SCRIPT_DIR.parent / "test_data"
 sys.path.append(str(SCRIPT_DIR.parent))
 
-from file_utils import (generate_file_sha1, get_full_dir_path,  # noqa: E402
-                        get_mount_path, get_path_disk_info,
+from file_utils import (generate_file_sha1, get_confirmation,  # noqa: E402
+                        get_full_dir_path, get_mount_path, get_path_disk_info,
                         get_path_from_mount, read_dir, read_file)
 
 
@@ -247,3 +247,16 @@ def test_get_path_disk_info(
     assert disk_info["label"] == label
     assert disk_info["size"] == size
     assert len(disk_info.keys()) == 3
+
+
+@pytest.mark.parametrize(
+    "reply_input, accepted_choices, result",
+    [
+        ("delete", ["delete"], True),
+        ("delete", ["delete", "Delete"], True),
+        ("yes", ["delete"], False),
+    ]
+)
+def test_get_confirmation(mocker, reply_input: str, accepted_choices: list[str], result: bool) -> None:
+    mocker.patch('file_utils.input', lambda x: reply_input)
+    assert get_confirmation("test", accepted_choices) == result

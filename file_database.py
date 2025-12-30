@@ -410,6 +410,10 @@ class FileManagerDatabase(SQLite3connection):
             return 1
         if len(disk_ids) > 1:
             logging.error(f"Disk param {disk} returns more than one disk with UUIDs {','.join(disk_ids.values())} from database")
-            return 1
+            return 2
+        for disk_id, disk_uuid in disk_ids.items():
+            if not file_utils.get_confirmation(f"Please confirm delete from DB disk {disk} with UUID {disk_uuid}. Type 'delete': ", ['delete']):
+                logging.warning(f"Did not get confirmation for disk {disk} deletion, exiting")
+                return 3
 
         return 0
