@@ -402,3 +402,14 @@ class FileManagerDatabase(SQLite3connection):
             return dir_id
         except ValueError:
             return 0
+
+    def delete_disk(self, disk: str) -> int:
+        disk_ids = {row[0]: row[1] for row in self._query_disks([disk])}
+        if not disk_ids:
+            logging.error(f"Failed to find disk {disk} in database")
+            return 1
+        if len(disk_ids) > 1:
+            logging.error(f"Disk param {disk} returns more than one disk with UUIDs {','.join(disk_ids.values())} from database")
+            return 1
+
+        return 0

@@ -405,6 +405,9 @@ def path_redundancy_command(file_db: FileUtils, args: argparse.Namespace) -> int
     file_db.path_redundancy(args.disks, args.path, args.exclude_path, files_count_limit = args.count_limit)
     return 0
 
+def delete_disk_command(file_db: FileUtils, args: argparse.Namespace) -> int:
+    return file_db.delete_disk(args.disk)
+
 def parse_arguments() -> argparse.Namespace:
     """CLI arguments parser."""
     arg_parser = argparse.ArgumentParser(
@@ -419,7 +422,7 @@ def parse_arguments() -> argparse.Namespace:
         help="Database file path",
         required=False,
         default=DEFAULT_DATABASE)
-    disk_required = ["backups-count", "list-dir", "move", "update-disk"]
+    disk_required = ["backups-count", "list-dir", "move", "update-disk", "delete-disk"]
     arg_parser.add_argument(
         "-d", "--disk", type=str,
         help=("Disk label or UUID to process, requirted for " +
@@ -493,6 +496,10 @@ def parse_arguments() -> argparse.Namespace:
         "-e", "--exclude-path", type=str, nargs='*', help="List of path to exclude")
     path_redundancy.add_argument(
         "-c", "--count-limit", type=int, default=1, help="Max number of file's backups to select, default 1")
+
+    delete_disk = subparsers.add_parser(
+        "delete-disk", help="Delete disk and file records on it")
+    delete_disk.set_defaults(func=delete_disk_command, cmd_name="delete-disk")
 
     args = arg_parser.parse_args()
     if args.cmd_name in disk_required and not args.disk:

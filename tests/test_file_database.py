@@ -187,6 +187,7 @@ def test_failure_set_disk_by_name(tmp_path: Path) -> None:
     [
         ("home/dimagolov/git/fileManager/test_data/media", 7),
         ("home/dimagolov/git/fileManager/test_data/storage", 14),
+        ("not existing path", 0),
     ]
 )
 def test_get_path_on_disk(tmp_path: Path, path: str, dir_id: int) -> None:
@@ -194,3 +195,19 @@ def test_get_path_on_disk(tmp_path: Path, path: str, dir_id: int) -> None:
     create_db(reference_db_path, _DB_TEST_DB_1)
     with FileManagerDatabase(reference_db_path, time.time()) as db:
         assert db.get_path_on_disk("0a2e2cb7-4543-43b3-a04a-40959889bd45", path) == dir_id
+
+
+@pytest.mark.parametrize(
+    "disk_name, result",
+    [
+        ("0a2e2cb7-4543-43b3-a04a-40959889bd45", 0),
+        ("DG-5TB-4", 1),
+        ("DG-5TB-4x", 1),
+        ("61BB-02E2", 0),
+    ]
+)
+def test_delete_disk_errors(tmp_path: Path, disk_name: str, result: int) -> None:
+    reference_db_path = tmp_path / _TEST_DB_NAME
+    create_db(reference_db_path, _DB_TEST_DB_1)
+    with FileManagerDatabase(reference_db_path, time.time()) as db:
+        assert db.delete_disk(disk_name) == result
