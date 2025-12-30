@@ -1,6 +1,7 @@
 """File database module."""
 
 import logging
+import re
 from pathlib import Path
 from time import time
 from typing import Dict, List, Optional, Tuple
@@ -290,7 +291,7 @@ class FileManagerDatabase(SQLite3connection):
             logging.debug(f"query_files_on_disk: got {len(result)} records after shard {i}")
         return result
 
-    def get_file_path_on_disk(self, file_id: List[str], disks: List[str], parent_root_path: Optional[str]= None) -> Dict[str, List[str]]:
+    def get_file_path_on_disk(self, file_id: List[str], disks: List[str], parent_root_path: Optional[str]= None, exclude_path: Optional[list[str]]= None) -> Dict[str, List[str]]:
         """Return path on disk of specific file_id."""
         if not file_id:
             return {}
@@ -298,7 +299,7 @@ class FileManagerDatabase(SQLite3connection):
         path_on_disk: Dict[str, List[str]] = {disk_label: [] for disk_label in disk_labels.values()}
         for disk_id, disk_label in disk_labels.items():
             all_path_on_disk = self.query_files_on_disk(int(disk_id), file_id)
-            path_on_disk[disk_label].extend([path for path in all_path_on_disk if not parent_root_path or path.startswith(f"{parent_root_path}/")])
+            path_on_disk[disk_label].extend([path for path in all_path_on_disk if (not parent_root_path or path.startswith(f"{parent_root_path}/")) and not any(re.match(exclude_pattern, path) for exclude_pattern in exclude_path or [])])
         return path_on_disk
 
     def query_subdirs(self, dir: int, recursively: bool = False) -> List[int]:

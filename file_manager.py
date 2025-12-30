@@ -2,6 +2,7 @@
 """Utils to view/analize file database."""
 import argparse
 import logging
+import re
 from pathlib import Path
 from shutil import move
 from typing import Callable, Dict, List, Tuple
@@ -224,7 +225,7 @@ class FileUtils(FileManagerDatabase):
                   f"contains {files_count} files and {subdir_count} subdirs")
         return dir_size, files_count, subdir_count
 
-    def get_unique_files(self, disk: str, dir_id: int, disk_index: int) -> Tuple[int, int, int, int]:
+    def get_unique_files(self, disk: str, dir_id: int, disk_index: int, exclude_path: list[str]) -> Tuple[int, int, int, int]:
         """Generates dictionary self._baseline_file_disks of unique files under provided dir_id
             Returned elements:
             - Number of unique files under dir_id on current disk
@@ -249,6 +250,9 @@ class FileUtils(FileManagerDatabase):
         baseline_files_size = 0
         while subdirs:
             cur_dir_id = subdirs.pop()
+            if any(re.match(exclude_pattern, self.get_path(cur_dir_id)) for exclude_pattern in exclude_path or []):
+                logging.debug(f"Skipping dir_id {cur_dir_id} {self.get_path(cur_dir_id)} matched pattern {exclude_path}")
+                continue
             for row in self._exec_query(
                     _DIR_LIST_SELECT, (cur_dir_id,), commit=False):
                 if not row[5]:  # element is a dir
@@ -271,23 +275,23 @@ class FileUtils(FileManagerDatabase):
                     new_files_size += int(row[5])
                     logging.debug(f"New file: {self.disk_name}/{self.get_path(cur_dir_id)}/{row[1]}")
 
-        logging.debug(f"Disk {disk} under dir_id {dir_id} have {files_count} unique files, size {dir_size} in {subdirs_count} subdirs, baseline count = {baseline_files_count}, size = {baseline_files_size}")
+        logging.debug(f"Disk {disk} under {self.get_path(dir_id)} have {files_count} unique files, size {dir_size} in {subdirs_count} subdirs, baseline count = {baseline_files_count}, size = {baseline_files_size}")
         logging.debug(f"Size of self._baseline_file_disks {len(self._baseline_file_disks)}")
         if disk_index:
-            logging.info(f"Disk {disk} under dir_id {dir_id} have {new_files_count} new unique files, size {new_files_size}")
+            logging.info(f"Disk {disk} under {self.get_path(dir_id)} have {new_files_count} new unique files, size {new_files_size}")
         return (files_count, dir_size, new_files_count, new_files_size)
 
     def path_redundancy(self, disks: List[str], path: str, exclude_path: list[str], files_count_limit: int=1) -> None:
-        logging.info(f"Calculating redundancy of {path} on disks {','.join(disks)}")
-        path_id = { disk: self.get_path_on_disk(disk, path) for disk in disks}
+        path_id = { disk: self.get_path_on_disk(disk, path) for disk in disks if self.get_path_on_disk(disk, path)}
+        logging.info(f"Calculating redundancy of {path} on disks {','.join(path_id.keys())}")
         logging.debug(path_id)
         disk_index = 0
         disk_status = {}
         for disk, dir_id in path_id.items():
-            disk_status[disk] = self.get_unique_files(disk, dir_id, disk_index)
+            disk_status[disk] = self.get_unique_files(disk, dir_id, disk_index, exclude_path)
             disk_index += 1
         limited_files_id = [file_id for file_id, disk_list in self._baseline_file_disks.items() if len(disk_list) <= files_count_limit]
-        for disk_label, file_path_list in self.get_file_path_on_disk(limited_files_id, disks, parent_root_path=path).items():
+        for disk_label, file_path_list in self.get_file_path_on_disk(limited_files_id, disks, parent_root_path=path, exclude_path=exclude_path).items():
             for file_path in file_path_list:
                 logging.info(f"File {file_path} only present on disk {disk_label}")
         logging.info(f"{len(limited_files_id)} files have less copies then {files_count_limit} on disks {','.join(disks)}")
