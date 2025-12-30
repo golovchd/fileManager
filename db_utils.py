@@ -57,6 +57,7 @@ class SQLite3connection:
 
     def __init__(self, db_path: Path):
         self._con = sqlite3.connect(db_path, timeout=10)
+        self.SQLITE_LIMIT_VARIABLE_NUMBER = max(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, 32766)
         logging.info(f"Using DB {db_path}")
 
     def __enter__(self):
