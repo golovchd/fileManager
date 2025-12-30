@@ -277,7 +277,7 @@ class FileUtils(FileManagerDatabase):
             logging.info(f"Disk {disk} under dir_id {dir_id} have {new_files_count} new unique files, size {new_files_size}")
         return (files_count, dir_size, new_files_count, new_files_size)
 
-    def path_redundancy(self, disks: List[str], path: str, files_count_limit: int=1) -> None:
+    def path_redundancy(self, disks: List[str], path: str, exclude_path: list[str], files_count_limit: int=1) -> None:
         logging.info(f"Calculating redundancy of {path} on disks {','.join(disks)}")
         path_id = { disk: self.get_path_on_disk(disk, path) for disk in disks}
         logging.debug(path_id)
@@ -396,7 +396,7 @@ def unique_files_command(file_db: FileUtils, args: argparse.Namespace) -> int:
 
 
 def path_redundancy_command(file_db: FileUtils, args: argparse.Namespace) -> int:
-    file_db.path_redundancy(args.disks, args.path)
+    file_db.path_redundancy(args.disks, args.path, args.exclude_path, files_count_limit = args.count_limit)
     return 0
 
 def parse_arguments() -> argparse.Namespace:
@@ -475,18 +475,6 @@ def parse_arguments() -> argparse.Namespace:
     unique_files.add_argument(
         "--sort", help="Sort output", choices=_SORT_OPTIONS_UNIQUE,
         default=_SORT_OPTIONS_UNIQUE[0])
-    unique_files.add_argument(
-        "-c", "--count-limit",
-        help="Max number of file's backups to select, default 1",
-        type=int, default=1)
-    unique_files.add_argument(
-        "-i", "--include-path",
-        help="List of path to include",
-        type=str, nargs='*')
-    unique_files.add_argument(
-        "-e", "--exclude-path",
-        help="List of path to exclude",
-        type=str, nargs='*')
 
     path_redundancy = subparsers.add_parser(
         "path-redundancy", help="Calculate redundancy of specific path")
@@ -495,6 +483,10 @@ def parse_arguments() -> argparse.Namespace:
         "--disks", help="Disks to include, at least 2 disks required", type=str, nargs="+", required=True)
     path_redundancy.add_argument(
         "--path", help="Directory path to include", type=str, required=True)
+    path_redundancy.add_argument(
+        "-e", "--exclude-path", type=str, nargs='*', help="List of path to exclude")
+    path_redundancy.add_argument(
+        "-c", "--count-limit", type=int, default=1, help="Max number of file's backups to select, default 1")
 
     args = arg_parser.parse_args()
     if args.cmd_name in disk_required and not args.disk:
