@@ -214,6 +214,7 @@ def test_delete_disk_errors(tmp_path: Path, mocker, disk_name: str, confirm: boo
     with FileManagerDatabase(reference_db_path, time.time()) as db:
         assert db.delete_disk(disk_name, False, False) == result
 
+
 def test_delete_disk_force(tmp_path: Path, mocker) -> None:
     mocker.patch('file_database.file_utils.get_confirmation', lambda x,y: False)
     reference_db_path = tmp_path / _TEST_DB_NAME
