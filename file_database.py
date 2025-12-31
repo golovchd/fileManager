@@ -78,7 +78,7 @@ _SELECT_SUBDIRS = ("SELECT `ROWID`, `Name`, `ParentId` FROM `fsrecords` "
                    "WHERE `ParentId` IN(?{}) AND `FileId` IS NULL "
                    "ORDER BY `ParentId`, `Name`")
 
-_DELETE_DISK_FILES = "DELETE FROM `fsrecords` WHERE `DiskId` = ?"
+_DELETE_DISK_FSRECORDS = "DELETE FROM `fsrecords` WHERE `DiskId` = ?"
 _DELETE_DISK = "DELETE FROM `disks` WHERE `UUID` = ? AND `ROWID` = ?"
 
 
@@ -419,7 +419,7 @@ class FileManagerDatabase(SQLite3connection):
                 logging.warning(f"Did not get confirmation for disk {disk} deletion, exiting")
                 return 3
             logging.info(f"Deleting file records associated with disk {disk}, UUID {disk_uuid}, DiskId {disk_id}...")
-            self._exec_query(_DELETE_DISK_FILES, (disk_id, ))
+            self._exec_query(_DELETE_DISK_FSRECORDS, (disk_id, ))
             logging.info(f"Deleting disk {disk}, UUID {disk_uuid}, DiskId {disk_id}...")
             self._exec_query(_DELETE_DISK, (disk_uuid, disk_id))
             logging.info(f"Disk {disk}, UUID {disk_uuid}, DiskId {disk_id} was deleted from DB with all file records")
