@@ -406,7 +406,7 @@ def path_redundancy_command(file_db: FileUtils, args: argparse.Namespace) -> int
     return 0
 
 def delete_disk_command(file_db: FileUtils, args: argparse.Namespace) -> int:
-    return file_db.delete_disk(args.disk, args.clear_orfan_files)
+    return file_db.delete_disk(args.disk, args.clear_orfan_files, args.force)
 
 def parse_arguments() -> argparse.Namespace:
     """CLI arguments parser."""
@@ -500,8 +500,11 @@ def parse_arguments() -> argparse.Namespace:
     delete_disk = subparsers.add_parser(
         "delete-disk", help="Delete disk and file records on it")
     delete_disk.set_defaults(func=delete_disk_command, cmd_name="delete-disk")
+    delete_disk.add_argument("-f", "--force",
+                             help="Force disk deletion, do not ask confirmation",
+                             action="store_true", default=False)
     delete_disk.add_argument("-c", "--clear-orfan-files",
-                             help="Clear orfan file records",
+                             help="Clear orfan file records after disk deletion",
                              action="store_true", default=False)
 
     args = arg_parser.parse_args()

@@ -406,7 +406,7 @@ class FileManagerDatabase(SQLite3connection):
         except ValueError:
             return 0
 
-    def delete_disk(self, disk: str, clear_orfan_files: bool) -> int:
+    def delete_disk(self, disk: str, clear_orfan_files: bool, force: bool) -> int:
         disk_ids = {row[0]: row[1] for row in self._query_disks([disk])}
         if not disk_ids:
             logging.error(f"Failed to find disk {disk} in database")
@@ -415,7 +415,7 @@ class FileManagerDatabase(SQLite3connection):
             logging.error(f"Disk param {disk} returns more than one disk with UUIDs {','.join(disk_ids.values())} from database")
             return 2
         for disk_id, disk_uuid in disk_ids.items():
-            if not file_utils.get_confirmation(f"Please confirm delete from DB disk {disk} with UUID {disk_uuid}. Type 'delete': ", ['delete']):
+            if not force and not file_utils.get_confirmation(f"Please confirm delete from DB disk {disk} with UUID {disk_uuid}. Type 'delete': ", ['delete']):
                 logging.warning(f"Did not get confirmation for disk {disk} deletion, exiting")
                 return 3
             logging.info(f"Deleting file records associated with disk {disk}, UUID {disk_uuid}, DiskId {disk_id}...")

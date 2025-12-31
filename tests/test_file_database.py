@@ -212,4 +212,11 @@ def test_delete_disk_errors(tmp_path: Path, mocker, disk_name: str, confirm: boo
     reference_db_path = tmp_path / _TEST_DB_NAME
     create_db(reference_db_path, _DB_TEST_DB_1)
     with FileManagerDatabase(reference_db_path, time.time()) as db:
-        assert db.delete_disk(disk_name, False) == result
+        assert db.delete_disk(disk_name, False, False) == result
+
+def test_delete_disk_force(tmp_path: Path, mocker) -> None:
+    mocker.patch('file_database.file_utils.get_confirmation', lambda x,y: False)
+    reference_db_path = tmp_path / _TEST_DB_NAME
+    create_db(reference_db_path, _DB_TEST_DB_1)
+    with FileManagerDatabase(reference_db_path, time.time()) as db:
+        assert db.delete_disk("61BB-02E2", False, True) == 0
