@@ -179,6 +179,33 @@ class FileUtils(FileManagerDatabase):
         for row in self._exec_query(_UNIQUE_FILES_SIZE, (), commit=False):
             print(f"Total size of unique files is {row[0]} MiB")
 
+    def _get_dir_content(self, dir_id: int, sort_index: int = -1) -> tuple[list[list[str]], int, int, int]:
+        """Returns list dir elements as first element, size of files in dir, count of files and subdirs as a tuple:
+            0: `fsrecords`.`ROWID`
+            1: `fsrecords`.`Name`
+            2: `fsrecords`.`FileDate`
+            3: `fsrecords`.`SHA1ReadDate`
+            4: `files`.`ROWID`
+            5: `files`.`FileSize`
+            6: `SHA1`
+            dir_content list sorted by sort_index and name if possible
+        """
+        dir_content = []
+        dir_size = 0
+        files_count = 0
+        subdir_count = 0
+        for row in self._exec_query(
+                _DIR_LIST_SELECT, (dir_id,), commit=False):
+            dir_content.append(row)
+            dir_size += int(row[5]) if row[5] else 0
+            if row[5]:
+                files_count += 1
+            else:
+                subdir_count += 1
+        if dir_content and sort_index != -1 and sort_index < len(dir_content[0]):
+            dir_content.sort(key=lambda x: f"{x[sort_index]}{x[1]}")
+        return (dir_content, dir_size, files_count, subdir_count)
+
     def list_dir(
                 self, disk: str, dir_path: str, recursive: bool,
                 summary: bool = False, only_count: bool = False, print_sha: bool = False
@@ -188,18 +215,8 @@ class FileUtils(FileManagerDatabase):
             dir_path.split("/"), insert_dirs=False)
         logging.debug(
             f"Listing dir {self.disk_name}/{dir_path} id={self._cur_dir_id}")
-        dir_content = []
-        dir_size = 0
-        files_count = 0
-        subdir_count = 0
-        for row in self._exec_query(
-                _DIR_LIST_SELECT, (self._cur_dir_id,), commit=False):
-            dir_content.append(row)
-            dir_size += int(row[5]) if row[5] else 0
-            if row[5]:
-                files_count += 1
-            else:
-                subdir_count += 1
+
+        dir_content, dir_size, files_count, subdir_count = self._get_dir_content(self._cur_dir_id)
 
         if not (summary or only_count):
             print_dir_content(dir_path, dir_content, print_sha)
@@ -224,6 +241,94 @@ class FileUtils(FileManagerDatabase):
             print(f"Size of files in {dir_path} with subdirs is {dir_size} B, "
                   f"contains {files_count} files and {subdir_count} subdirs")
         return dir_size, files_count, subdir_count
+
+    def get_disk_dir_id(self, disk_path: str) -> tuple[int, int, str]:
+        disk_parts = disk_path.split("/")
+        disk_rows = {row[0]: row for row in self._query_disks([disk_parts[0]])}
+        if not disk_rows:
+            raise ValueError(f"Failed to find disk {disk_parts[0]} in database")
+        if len(disk_rows) > 1:
+            raise ValueError(f"Disk param {disk_parts[0]} returns more than one disk with UUIDs {','.join([row[1] for row in disk_rows.values()])} from database")
+        for disk_id, row in disk_rows.items():
+            self._set_disk(int(disk_id), row[1], int(row[2]), row[3])
+            self.set_top_dir()
+            self._cur_dir_id = self.get_dir_id(disk_parts[1:], insert_dirs=False)
+        return (self._disk_id, self._cur_dir_id, disk_parts[0])
+
+    def diff_dirs(self, disk1_name: str, dir1_id: int, disk2_name: str, dir2_id: int) -> int:
+        """Recursively compares dirs. Returns 0 is matching, > 0 otherwise"""
+        result = 0
+        dir1_content, _, files1_count, subdir1_count = self._get_dir_content(dir1_id, 4)
+        dir2_content, _, files2_count, subdir2_count = self._get_dir_content(dir2_id, 4)
+        idx_1 = 0
+        idx_2 = 0
+        disk1_path = f"{disk1_name}/{self.get_path(dir1_id)}"
+        disk2_path = f"{disk2_name}/{self.get_path(dir2_id)}"
+        while idx_1 < files1_count + subdir1_count and idx_2 < files2_count + subdir2_count:
+            row1 = dir1_content[idx_1]
+            row2 = dir2_content[idx_2]
+            if not row1[4] and not row2[4]:  # both are dirs
+                if row1[1] == row2[1]:
+                    result += self.diff_dirs(disk1_name, int(row1[0]), disk2_name, int(row2[0]))
+                    idx_1 += 1
+                    idx_2 += 1
+                elif row1[1] < row2[1]:
+                    result += 1
+                    print(f"subdir {row1[1]} present in {disk1_path} and missing in {disk2_path}")
+                    idx_1 += 1
+                else:
+                    result += 1
+                    print(f"subdir {row2[1]} present in {disk2_path} and missing in {disk1_path}")
+                    idx_2 += 1
+            elif not row1[4]:   # subdir only in dir1
+                result += 1
+                print(f"subdir {row1[1]} present in {disk1_path} and missing in {disk2_path}")
+                idx_1 += 1
+            elif not row2[4]:   # subdir only in dir2
+                result += 1
+                print(f"subdir {row2[1]} present in {disk2_path} and missing in {disk1_path}")
+                idx_2 += 1
+            elif row1[4] != row2[4]:  # both are files and not matching
+                if row1[1] == row2[1]:
+                    print(f"{row1[1]} have SHA1 {row1[6]} in {disk1_path} and SHA1 {row2[6]} in {disk2_path}")
+                    idx_1 += 1
+                    idx_2 += 1
+                elif row1[4] < row2[4]:
+                    result += 1
+                    print(f"file {row1[1]} SHA1 {row1[6]} present in {disk1_path} and missing in {disk2_path}")
+                    idx_1 += 1
+                else:
+                    result += 1
+                    print(f"file {row2[1]} SHA1 {row2[6]} present in {disk2_path} and missing in {disk1_path}")
+                    idx_2 += 1
+            else:   # referring same file from both dirs
+                idx_1 += 1
+                idx_2 += 1
+
+        while idx_1 < files1_count + subdir1_count:
+            result += 1
+            row1 = dir1_content[idx_1]
+            if row1[4]:
+                print(f"file {row1[1]} SHA1 {row1[6]} present in {disk1_path} and missing in {disk2_path}")
+            else:
+                print(f"subdir {row1[1]} present in {disk1_path} and missing in {disk2_path}")
+            idx_1 += 1
+
+        while idx_2 < files2_count + subdir2_count:
+            result += 1
+            row2 = dir2_content[idx_2]
+            if row2[4]:
+                print(f"file {row2[1]} SHA1 {row2[6]} present in {disk2_path} and missing in {disk1_path}")
+            else:
+                print(f"subdir {row2[1]} present in {disk2_path} and missing in {disk1_path}")
+            idx_2 += 1
+
+        return result
+
+    def diff(self, disk1_path: str, disk2_path: str) -> int:
+        _, dir2_id, disk2_name = self.get_disk_dir_id(disk2_path)
+        _, dir1_id, disk1_name = self.get_disk_dir_id(disk1_path)
+        return self.diff_dirs(disk1_name, dir1_id, disk2_name, dir2_id)
 
     def get_unique_files(self, disk: str, dir_ids: list[int], disk_index: int, exclude_path: list[str]) -> Tuple[int, int, int, int]:
         """Generates dictionary self._baseline_file_disks of unique files under provided dir_id
@@ -382,6 +487,11 @@ def list_dir_command(file_db: FileUtils, args: argparse.Namespace) -> int:
         return 1
 
 
+def diff_command(file_db: FileUtils, args: argparse.Namespace) -> int:
+    """Listing disks."""
+    return file_db.diff(args.disk1_path, args.disk2_path)
+
+
 def move_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     return file_db.move_fs_item(
             args.disk, args.src_path, args.dst_path, args.dry_run)
@@ -460,6 +570,12 @@ def parse_arguments() -> argparse.Namespace:
         "-s", "--summary", help="Print only summary", action="store_true")
     output_format.add_argument(
         "-p", "--print-sha", help="Print SHA for each file", action="store_true")
+
+    diff = subparsers.add_parser(
+        "diff", help="Diff <disk1>/<path1> vs <disk2>/<path2>")
+    diff.set_defaults(func=diff_command, cmd_name="diff")
+    diff.add_argument("disk1_path", type=str, help="Path to dir at disk 1")
+    diff.add_argument("disk2_path", type=str, help="Path to dir at disk 2")
 
     move_object = subparsers.add_parser(
         "move", help="Move dir, update DB accordingly")
