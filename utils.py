@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Callable, List, Optional
+from typing import Any, Callable, List, Optional
 
 
 def float2timestamp(float_timestamp: float) -> datetime:
@@ -19,7 +19,7 @@ def timestamp2exif_str(float_timestamp: float) -> str:
 
 
 def print_table(
-        data: List[List[str]],
+        data: List[Any],
         headers: List[str],
         indexes: Optional[List[int]] = None,
         formats: Optional[List[Callable]] = None,

@@ -179,7 +179,7 @@ class FileUtils(FileManagerDatabase):
         for row in self._exec_query(_UNIQUE_FILES_SIZE, (), commit=False):
             print(f"Total size of unique files is {row[0]} MiB")
 
-    def _get_dir_content(self, dir_id: int, sort_index: int = -1) -> tuple[list[list[str]], int, int, int]:
+    def _get_dir_content(self, dir_id: int, sort_index: int = -1) -> tuple[list[tuple[int, str, float, float, int, int, str]], int, int, int]:
         """Returns list dir elements as first element, size of files in dir, count of files and subdirs as a tuple:
             0: `fsrecords`.`ROWID`
             1: `fsrecords`.`Name`
@@ -255,7 +255,7 @@ class FileUtils(FileManagerDatabase):
             self._cur_dir_id = self.get_dir_id(disk_parts[1:], insert_dirs=False)
         return (self._disk_id, self._cur_dir_id, disk_parts[0])
 
-    def _get_nonempty_dir_row(self, row: list[str]) -> list[list[str]]:
+    def _get_nonempty_dir_row(self, row: tuple[int, str, float, float, int, int, str]) -> list[tuple[int, str, float, float, int, int, str]]:
         if row[4]:
             return []
         _, _, files_count, subdir_count = self._get_dir_content(int(row[0]))
@@ -464,7 +464,7 @@ class FileUtils(FileManagerDatabase):
         return 0
 
 
-def print_dir_content(dir_path: str, dir_content: List[List[str]], print_sha: bool) -> None:
+def print_dir_content(dir_path: str, dir_content: list[tuple[int, str, float, float, int, int, str]], print_sha: bool) -> None:
     headers = ["Name", "Size", "File Date", "Hash Date"]
     if print_sha:
         headers.append("SHA1")
