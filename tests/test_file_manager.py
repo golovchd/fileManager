@@ -157,9 +157,29 @@ def test_list_dir(tmp_path: Path, disk: str, path: str, recursive: bool, result:
             1,
         ),
         (
+            "0a2e2cb7-4543-43b3-a04a-40959889bd45/home/dimagolov",
+            "0a2e2cb7-4543-43b3-a04a-40959889bd45/home/dimagolov/git",
+            2,
+        ),
+        (
+            "0a2e2cb7-4543-43b3-a04a-40959889bd45/home/dimagolov/git",
+            "0a2e2cb7-4543-43b3-a04a-40959889bd45/home/dimagolov",
+            2,
+        ),
+        (
             "61BB-02E2/Data/storage",
             "0a2e2cb7-4543-43b3-a04a-40959889bd45/home/dimagolov/git/fileManager/test_data/storage",
             1,
+        ),
+        (
+            "61BB-02E2/Data/storage",
+            "0a2e2cb7-4543-43b3-a04a-40959889bd45/home/dimagolov/git/fileManager/test_data/media",
+            7,
+        ),
+        (
+            "0a2e2cb7-4543-43b3-a04a-40959889bd45/home/dimagolov/git/fileManager/test_data/media",
+            "61BB-02E2/Data/storage",
+            7,
         ),
     ]
 )
