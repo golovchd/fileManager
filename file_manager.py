@@ -198,7 +198,7 @@ class FileUtils(FileManagerDatabase):
                 _DIR_LIST_SELECT, (dir_id,), commit=False):
             dir_content.append(row)
             dir_size += int(row[5]) if row[5] else 0
-            if row[5]:
+            if row[4]:
                 files_count += 1
             else:
                 subdir_count += 1

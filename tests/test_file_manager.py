@@ -8,7 +8,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 TEST_DATA_DIR = SCRIPT_DIR.parent / "test_data"
 sys.path.append(str(SCRIPT_DIR.parent))
 
-from db_utils import TABLE_SELECT, create_db  # noqa: E402
+from db_utils import create_db  # noqa: E402
 from file_manager import FileUtils
 
 _DB_TEST_DB_DUMP = SCRIPT_DIR.parent / "fileManager_test_dump.sql"
@@ -110,3 +110,30 @@ def test_get_disk_dir_id_error(tmp_path: Path, disk_path: str, message: str) -> 
     with FileUtils(reference_db_path) as db:
         with pytest.raises(ValueError, match=message):
             db.get_disk_dir_id(disk_path)
+
+@pytest.mark.parametrize(
+    "disk, path, recursive, result",
+    [
+        (
+            "0a2e2cb7-4543-43b3-a04a-40959889bd45", "home", False,
+            (0, 0, 1),
+        ),
+        (
+            "0a2e2cb7-4543-43b3-a04a-40959889bd45", "home/dimagolov/git/fileManager/test_data/media", False,
+            (9435024, 6, 0),
+        ),
+        (
+            "0a2e2cb7-4543-43b3-a04a-40959889bd45", "home/dimagolov/git/fileManager/test_data", True,
+            (22849002, 12, 5),
+        ),
+        (
+            "0a2e2cb7-4543-43b3-a04a-40959889bd45", "home/dimagolov/git/fileManager/test_data/storage", True,
+            (13413978, 6, 3),
+        ),
+    ]
+)
+def test_list_dir(tmp_path: Path, disk: str, path: str, recursive: bool, result: str) -> None:
+    reference_db_path = tmp_path / _TEST_DB_NAME
+    create_db(reference_db_path, _DB_TEST_DB_1)
+    with FileUtils(reference_db_path) as db:
+        assert db.list_dir(disk, path, recursive) == result
