@@ -306,6 +306,11 @@ class FileUtils(FileManagerDatabase):
             else:
                 missing_in_dir1_files.append(row2)
                 idx_2 += 1
+            # Skip identical files to avoid diff on already compared files
+            while idx_1 and idx_1 < files1_count + subdir1_count and row1[6] and row1[0] != dir1_content[idx_1][0] and dir1_content[idx_1][6] == row1[6]:
+                idx_1 += 1
+            while idx_2 and idx_2 < files2_count + subdir2_count and row2[6] and row2[0] != dir2_content[idx_2][0] and dir2_content[idx_2][6] == row2[6]:
+                idx_2 += 1
 
         while idx_1 < files1_count + subdir1_count:
             row1 = dir1_content[idx_1]

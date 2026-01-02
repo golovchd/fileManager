@@ -146,7 +146,21 @@ def test_list_dir(tmp_path: Path, disk: str, path: str, recursive: bool, result:
             "61BB-02E2/Data/storage/second_dir",
             0,
         ),
-
+        (
+            "61BB-02E2/Data/storage/second_dir",
+            "0a2e2cb7-4543-43b3-a04a-40959889bd45/home/dimagolov/git/fileManager/test_data/storage/second_dir",
+            0,
+        ),
+        (
+            "0a2e2cb7-4543-43b3-a04a-40959889bd45/home/dimagolov/git/fileManager/test_data/storage",
+            "61BB-02E2/Data/storage",
+            1,
+        ),
+        (
+            "61BB-02E2/Data/storage",
+            "0a2e2cb7-4543-43b3-a04a-40959889bd45/home/dimagolov/git/fileManager/test_data/storage",
+            1,
+        ),
     ]
 )
 def test_diff(tmp_path: Path, path1: str,  path2: str, result: int) -> None:
