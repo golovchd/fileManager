@@ -263,7 +263,6 @@ class FileUtils(FileManagerDatabase):
             return [row]
         return []
 
-
     def diff_dirs(self, disk1_name: str, dir1_id: int, disk2_name: str, dir2_id: int) -> int:
         """Recursively compares dirs. Returns 0 is matching, > 0 otherwise"""
         result = 0
@@ -347,6 +346,9 @@ class FileUtils(FileManagerDatabase):
         _, dir2_id, disk2_name = self.get_disk_dir_id(disk2_path)
         _, dir1_id, disk1_name = self.get_disk_dir_id(disk1_path)
         return self.diff_dirs(disk1_name, dir1_id, disk2_name, dir2_id)
+
+    def find(self, disk: str, dir: bool, name: str, include_path: str, exclude_path: str, size: str) -> int:
+        return 0
 
     def get_unique_files(self, disk: str, dir_ids: list[int], disk_index: int, exclude_path: list[str]) -> Tuple[int, int, int, int]:
         """Generates dictionary self._baseline_file_disks of unique files under provided dir_id
@@ -510,6 +512,10 @@ def diff_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     return file_db.diff(args.disk1_path, args.disk2_path)
 
 
+def find_command(file_db: FileUtils, args: argparse.Namespace) -> int:
+    return file_db.find(args.disk, args.dir, args.name, args.include_path, args.exclude_path, args.size)
+
+
 def move_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     return file_db.move_fs_item(
             args.disk, args.src_path, args.dst_path, args.dry_run)
@@ -533,8 +539,10 @@ def path_redundancy_command(file_db: FileUtils, args: argparse.Namespace) -> int
     file_db.path_redundancy(args.disks, args.path, args.exclude_path, files_count_limit = args.count_limit)
     return 0
 
+
 def delete_disk_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     return file_db.delete_disk(args.disk, args.clear_orfan_files, args.force)
+
 
 def parse_arguments() -> argparse.Namespace:
     """CLI arguments parser."""
@@ -597,6 +605,15 @@ def parse_arguments() -> argparse.Namespace:
     diff.set_defaults(func=diff_command, cmd_name="diff")
     diff.add_argument("disk1_path", type=str, help="Path to dir at disk 1")
     diff.add_argument("disk2_path", type=str, help="Path to dir at disk 2")
+
+    find = subparsers.add_parser(
+        "find", help="Find file or folder in DB")
+    find.set_defaults(func=find_command, cmd_name="find")
+    find.add_argument("-d", "--dir", action="store_true", default=False, help="Look for folders, not a files")
+    find.add_argument("-n", "--name", type=str, help="Name matching pattern, could include bash wiledcards ? and *")
+    find.add_argument("-i", "--include-path", type=str, help="Include path pattern, could include bash wiledcards ? and *")
+    find.add_argument("-e", "--exclude-path", type=str, help="Exclude path pattern, could include bash wiledcards ? and *")
+    find.add_argument("-s", "--size", type=str, help="Size filter. In bytes by default, could use K/KB/KiB/.../TiB suffixes and +/- to match bigger and smaller than specified files")
 
     move_object = subparsers.add_parser(
         "move", help="Move dir, update DB accordingly")
