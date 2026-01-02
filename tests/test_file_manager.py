@@ -132,8 +132,25 @@ def test_get_disk_dir_id_error(tmp_path: Path, disk_path: str, message: str) -> 
         ),
     ]
 )
-def test_list_dir(tmp_path: Path, disk: str, path: str, recursive: bool, result: str) -> None:
+def test_list_dir(tmp_path: Path, disk: str, path: str, recursive: bool, result: tuple[int, int, int]) -> None:
     reference_db_path = tmp_path / _TEST_DB_NAME
     create_db(reference_db_path, _DB_TEST_DB_1)
     with FileUtils(reference_db_path) as db:
         assert db.list_dir(disk, path, recursive) == result
+
+@pytest.mark.parametrize(
+    "path1, path2, result",
+    [
+        (
+            "0a2e2cb7-4543-43b3-a04a-40959889bd45/home/dimagolov/git/fileManager/test_data/storage/second_dir",
+            "61BB-02E2/Data/storage/second_dir",
+            0,
+        ),
+
+    ]
+)
+def test_diff(tmp_path: Path, path1: str,  path2: str, result: int) -> None:
+    reference_db_path = tmp_path / _TEST_DB_NAME
+    create_db(reference_db_path, _DB_TEST_DB_1)
+    with FileUtils(reference_db_path) as db:
+        assert db.diff(path1, path2) == result
