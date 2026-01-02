@@ -78,6 +78,9 @@ _SELECT_SUBDIRS = ("SELECT `ROWID`, `Name`, `ParentId` FROM `fsrecords` "
                    "WHERE `ParentId` IN(?{}) AND `FileId` IS NULL "
                    "ORDER BY `ParentId`, `Name`")
 
+_DELETE_DISK_FSRECORDS = "DELETE FROM `fsrecords` WHERE `DiskId` = ?"
+_DELETE_DISK = "DELETE FROM `disks` WHERE `UUID` = ? AND `ROWID` = ?"
+
 
 class FileManagerDatabase(SQLite3connection):
     """Representation of fileManager database and relevant queries."""
@@ -402,3 +405,24 @@ class FileManagerDatabase(SQLite3connection):
             return dir_id
         except ValueError:
             return 0
+
+    def delete_disk(self, disk: str, clear_orfan_files: bool, force: bool) -> int:
+        disk_ids = {row[0]: row[1] for row in self._query_disks([disk])}
+        if not disk_ids:
+            logging.error(f"Failed to find disk {disk} in database")
+            return 1
+        if len(disk_ids) > 1:
+            logging.error(f"Disk param {disk} returns more than one disk with UUIDs {','.join(disk_ids.values())} from database")
+            return 2
+        for disk_id, disk_uuid in disk_ids.items():
+            if not force and not file_utils.get_confirmation(f"Please confirm delete from DB disk {disk} with UUID {disk_uuid}. Type 'delete': ", ['delete']):
+                logging.warning(f"Did not get confirmation for disk {disk} deletion, exiting")
+                return 3
+            logging.info(f"Deleting file records associated with disk {disk}, UUID {disk_uuid}, DiskId {disk_id}...")
+            self._exec_query(_DELETE_DISK_FSRECORDS, (disk_id, ))
+            logging.info(f"Deleting disk {disk}, UUID {disk_uuid}, DiskId {disk_id}...")
+            self._exec_query(_DELETE_DISK, (disk_uuid, disk_id))
+            logging.info(f"Disk {disk}, UUID {disk_uuid}, DiskId {disk_id} was deleted from DB with all file records")
+            self.handle_file_orfans(clear_orfan_files=clear_orfan_files)
+
+        return 0

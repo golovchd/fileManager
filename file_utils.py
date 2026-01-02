@@ -128,3 +128,6 @@ def read_file(
         file_name, file_type, file_stat.st_size, file_stat.st_mtime,
         sha1_hex, hash_time
     )
+
+def get_confirmation(message: str, accepted_choices: list[str]) -> bool:
+    return input(message) in accepted_choices

@@ -187,6 +187,7 @@ def test_failure_set_disk_by_name(tmp_path: Path) -> None:
     [
         ("home/dimagolov/git/fileManager/test_data/media", 7),
         ("home/dimagolov/git/fileManager/test_data/storage", 14),
+        ("not existing path", 0),
     ]
 )
 def test_get_path_on_disk(tmp_path: Path, path: str, dir_id: int) -> None:
@@ -194,3 +195,29 @@ def test_get_path_on_disk(tmp_path: Path, path: str, dir_id: int) -> None:
     create_db(reference_db_path, _DB_TEST_DB_1)
     with FileManagerDatabase(reference_db_path, time.time()) as db:
         assert db.get_path_on_disk("0a2e2cb7-4543-43b3-a04a-40959889bd45", path) == dir_id
+
+
+@pytest.mark.parametrize(
+    "disk_name, confirm, result",
+    [
+        ("0a2e2cb7-4543-43b3-a04a-40959889bd45", True, 0),
+        ("DG-5TB-4", True, 2),
+        ("DG-5TB-4x", True, 1),
+        ("61BB-02E2", True, 0),
+        ("61BB-02E2", False, 3),
+    ]
+)
+def test_delete_disk_errors(tmp_path: Path, mocker, disk_name: str, confirm: bool, result: int) -> None:
+    mocker.patch('file_database.file_utils.get_confirmation', lambda x,y: confirm)
+    reference_db_path = tmp_path / _TEST_DB_NAME
+    create_db(reference_db_path, _DB_TEST_DB_1)
+    with FileManagerDatabase(reference_db_path, time.time()) as db:
+        assert db.delete_disk(disk_name, False, False) == result
+
+
+def test_delete_disk_force(tmp_path: Path, mocker) -> None:
+    mocker.patch('file_database.file_utils.get_confirmation', lambda x,y: False)
+    reference_db_path = tmp_path / _TEST_DB_NAME
+    create_db(reference_db_path, _DB_TEST_DB_1)
+    with FileManagerDatabase(reference_db_path, time.time()) as db:
+        assert db.delete_disk("61BB-02E2", False, True) == 0
