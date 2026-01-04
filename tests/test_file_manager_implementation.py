@@ -9,7 +9,7 @@ TEST_DATA_DIR = SCRIPT_DIR.parent / "test_data"
 sys.path.append(str(SCRIPT_DIR.parent))
 
 from db_utils import create_db  # noqa: E402
-from file_manager_implementation import FileUtils
+from file_manager import FileUtils
 
 _DB_TEST_DB_DUMP = SCRIPT_DIR.parent / "fileManager_test_dump.sql"
 _DB_TEST_DB_1 = SCRIPT_DIR.parent / "fileManager_test_1.sql"
