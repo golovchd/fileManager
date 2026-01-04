@@ -350,23 +350,6 @@ class FileUtils(FileManagerDatabase):
         _, dir1_id, disk1_name = self.get_disk_dir_id(disk1_path)
         return self.diff_dirs(disk1_name, dir1_id, disk2_name, dir2_id)
 
-    def find(self, disk: str, dir: bool, name: str, include_path: list[str], exclude_path: list[str], size: str, print_sha: bool) -> int:
-        params = (name.replace("?", "_").replace("*", "%"),)
-        matching_list = []
-        for row in self._exec_query(
-                _FILD_SELECT.format(file="" if dir else "NOT "), params, commit=False):
-            path = self.get_path(row[7])
-            if include_path and not any(re.match(include_pattern.replace("?", ".").replace("*", ".*"), path) for include_pattern in include_path):
-                continue
-            if exclude_path and any(re.match(exclude_pattern.replace("?", ".").replace("*", ".*"), path) for exclude_pattern in exclude_path):
-                continue
-            row[8] = path
-            matching_list.append(row)
-
-
-        print_find_results(matching_list, print_sha)
-        return 0
-
     def get_unique_files(self, disk: str, dir_ids: list[int], disk_index: int, exclude_path: list[str]) -> Tuple[int, int, int, int]:
         """Generates dictionary self._baseline_file_disks of unique files under provided dir_id
             Returned elements:
