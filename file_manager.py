@@ -31,6 +31,10 @@ def diff_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     return file_db.diff(args.disk1_path, args.disk2_path)
 
 
+def find_command(file_db: FileUtils, args: argparse.Namespace) -> int:
+    return file_db.find(args.disk, args.dir, args.name, args.include_path, args.exclude_path, args.size, args.print_sha)
+
+
 def move_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     return file_db.move_fs_item(
             args.disk, args.src_path, args.dst_path, args.dry_run)
@@ -120,6 +124,16 @@ def parse_arguments() -> argparse.Namespace:
     diff.set_defaults(func=diff_command, cmd_name="diff")
     diff.add_argument("disk1_path", type=str, help="Path to dir at disk 1")
     diff.add_argument("disk2_path", type=str, help="Path to dir at disk 2")
+
+    find = subparsers.add_parser(
+        "find", help="Find file or folder in DB")
+    find.set_defaults(func=find_command, cmd_name="find")
+    find.add_argument("-n", "--name", type=str, required=True, help="Name matching pattern, could include bash wiledcards ? and *")
+    find.add_argument("-d", "--dir", action="store_true", default=False, help="Look for folders, not a files")
+    find.add_argument("-i", "--include-path", type=str, nargs="*", help="Include path pattern, could include bash wiledcards ? and *")
+    find.add_argument("-e", "--exclude-path", type=str, nargs="*", help="Exclude path pattern, could include bash wiledcards ? and *")
+    find.add_argument("-s", "--size", type=str, help="Size filter. In bytes by default, could use K/KB/KiB/.../TiB suffixes and +/- to match bigger and smaller than specified files")
+    find.add_argument("-p", "--print-sha", help="Print SHA for each file", action="store_true")
 
     move_object = subparsers.add_parser(
         "move", help="Move dir, update DB accordingly")
