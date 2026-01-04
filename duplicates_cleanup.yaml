@@ -9,12 +9,22 @@ dir-commons:
     delete: ^Data/Backup
   - keep: ^Data/Music
     delete: ^Data/Backup
+  - keep: ^Data/Music/.*\.(MP|mp)3
+    delete: ^Data/Photos/.*\.(MP|mp)3
   - keep: ^Data/Photos
     skip: ^Data/Backup/.*(DropBox|Dropbox).*
+  - keep: ^Data/Photos/Family/Alexa & Maria/0-3 Years/
+    delete: ^Data/Photos/Family/Alexa & Maria/\d{2} -
   - keep: ^Data/Photos
     delete: ^Data/Backup
   - keep: ^Data/Videos
-    delete: ^Data/Backup
+    delete: ^Data/Backup/
+  - keep: ^Data/Videos/Massage
+    delete: ^Data/Videos/! To Process/Massage
+  - keep: ^Data/Videos/\d{4}/
+    delete: ^Data/Videos/! To Process/
+  - keep: Data/Videos/! To Process/
+    skip: Data/Photos/(\d{4}|Family)
   - keep: ^Data/Videos
     delete: ^Data/Photos
   - keep: ^Data/VirtualDrives
@@ -23,6 +33,9 @@ dir-commons:
     delete: ^Data/Backup
   - keep: ^Data/Backup/.*(?P<date>\d{4}-\d{2}-\d{2})((?!Xperia).)*$
     delete: ^Data/Backup/.*(?P<date>\d{4}-\d{2}-\d{2}).*Xperia
+  - keep: ^Data/Backup/.*(?P<date>\d{4}-\d{2}-\d{2}).*Xperia
+    delete: ^Data/Backup/.*(?P<date>\d{4}-\d{2}-\d{2}).*Xperia
+    condition: latest
   - keep: ^Data/Backup/.*(?P<date>\d{4}-\d{2}-\d{2})((?!Xperia).)*$
     delete: ^Data/Backup/.*(?P<date>\d{4}-\d{2}-\d{2})((?!(?:/svn|/git|\/.git|\/.svn)).)*$
     condition: latest
@@ -32,6 +45,8 @@ dir-commons:
     delete: ^Data/Photos/! To Process/!!_conv
   - keep: ^Data/Photos/! To DVD/
     delete: ^Data/Photos/! To Process/
+  - keep: ^Data/Photos/! To Process/\d{4}
+    skip: ^Data/Photos/! To Process/!DimaSkurchynsky
   - keep: ^Data/Photos/! To Process/\d{4}
     delete: ^Data/Photos/! To Process/!
   - keep: ^Data/Photos/! To Process/.+/\[Originals\]
@@ -84,4 +99,7 @@ same-files:
     groups: [name, ext]
   - keep: ^((?!\.com\.google\.Chrome\.).)+$
     delete: ^\.com\.google\.Chrome\..+$
+    groups: []
+  - keep: ^[0-9]+\.m2ts$
+    delete: ^[0-9]+\.MTS$
     groups: []
