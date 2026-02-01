@@ -58,13 +58,13 @@ _MOVE_FS_RECORD = ("UPDATE `fsrecords` SET `ParentId` = ?, `Name` = ? "
                    "WHERE `ROWID` = ?")
 _FILD_SELECT = ("SELECT `fsrecords`.`ROWID`, `fsrecords`.`Name`, "
                 "`fsrecords`.`FileDate`, `fsrecords`.`SHA1ReadDate`, "
-                "`files`.`ROWID`, `files`.`FileSize`, `SHA1`, `ParentId`, "
+                "`files`.`ROWID`, `FileSize`, `SHA1`, `ParentId`, "
                 "`DiskId`, `Label`"
                 " FROM `fsrecords` LEFT JOIN `files`"
                 " ON `files`.`ROWID` = `fsrecords`.`FileId`"
                 " LEFT JOIN `disks` ON `disks`.`ROWID` = `DiskId`"
                 " WHERE `Name` LIKE ?"
-                " AND `fsrecords`.`FileId` IS {file}NULL{disk_condition}"
+                " AND `fsrecords`.`FileId` IS {file}NULL{extra_condition}"
                 " ORDER BY `DiskId`, `Name`,  `ParentId`")
 
 
@@ -358,13 +358,23 @@ class FileUtils(FileManagerDatabase):
         name_param = name.replace("?", "_").replace("*", "%")
         params = [name_param]
         if disk_ids:
-            disk_condition = f" AND `DiskId` in (?{',?'*(len(disk_ids) - 1)})"
+            extra_condition = f" AND `DiskId` in (?{',?'*(len(disk_ids) - 1)})"
             params.extend(disk_ids)
         else:
-            disk_condition = ""
+            extra_condition = ""
+        if size:
+            if size[0] in "-<":
+                extra_condition = f"{extra_condition} AND `FileSize` < ?"
+                params.append(size[1:])
+            elif size[0] in "+>":
+                extra_condition = f"{extra_condition} AND `FileSize` > ?"
+                params.append(size[1:])
+            else:
+                extra_condition = f"{extra_condition} AND `FileSize` = ?"
+                params.append(size)
         matching_list = []
         for row in self._exec_query(
-                _FILD_SELECT.format(file="" if dir else "NOT ", disk_condition=disk_condition), params, commit=False):
+                _FILD_SELECT.format(file="" if dir else "NOT ", extra_condition=extra_condition), params, commit=False):
             path = self.get_path(row[7], disk_id=row[8])
             if include_path and not any(re.match(include_pattern.replace("?", ".").replace("*", ".*"), path) for include_pattern in include_path):
                 continue

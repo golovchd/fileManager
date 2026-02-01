@@ -192,37 +192,80 @@ def test_diff(tmp_path: Path, path1: str,  path2: str, result: int) -> None:
 @pytest.mark.parametrize(
     "disk, dir, name, include_path, exclude_path, size, expected_result",
     [
-        (None, True, 'fileManager', [], [], 0,
+        (None, True, 'fileManager', [], [], '',
             [[5, 'fileManager', None, None, None, None, None, 4, 1, '', 'home/dimagolov/git']]
         ),
-        (None, False, 'fileManager', [], [], 0,
+        (None, False, 'fileManager', [], [], '',
             []
         ),
-        (None, False, 'IMG_0013.JPG', [], [], 0,
+        (None, False, 'IMG_0013.JPG', [], [], '',
             [[11, 'IMG_0013.JPG', 1.69543415966538858416e+09, 1.69559020981002426141e+09, 4, 3242996, 'f7131eaafe02290403d0c96837e69e99134749a2', 7, 1, '', 'home/dimagolov/git/fileManager/test_data/media']]
         ),
-        (None, False, 'DSC06979c.JPG', [], [], 0,
+        (None, False, 'DSC06979c.JPG', [], [], '',
             [
                 [17, 'DSC06979c.JPG', 1.6954341597253854275e+09, 1.69559020993184852597e+09, 7, 1215763, 'c81bb242e63bb1296fa1062fe5b3118f476193c9', 14, 1, '', 'home/dimagolov/git/fileManager/test_data/storage'],
                 [28, 'DSC06979c.JPG', 1.6954341597253854275e+09, 1.69559020993184852597e+09, 7, 1215763, 'c81bb242e63bb1296fa1062fe5b3118f476193c9', 26, 2, 'DG-5TB-4', 'Data/storage'],
             ]
         ),
-        (None, False, 'DSC06979c.JPG', ['Data/*'], [], 0,
+        (None, False, 'DSC06979c.JPG', ['Data/*'], [], '',
             [
                 [28, 'DSC06979c.JPG', 1.6954341597253854275e+09, 1.69559020993184852597e+09, 7, 1215763, 'c81bb242e63bb1296fa1062fe5b3118f476193c9', 26, 2, 'DG-5TB-4', 'Data/storage'],
             ]
         ),
-        (None, False, 'DSC06979c.JPG', [], ['*dimagolov*'], 0,
+        (None, False, 'DSC06979c.JPG', [], ['*dimagolov*'], '',
             [
                 [28, 'DSC06979c.JPG', 1.6954341597253854275e+09, 1.69559020993184852597e+09, 7, 1215763, 'c81bb242e63bb1296fa1062fe5b3118f476193c9', 26, 2, 'DG-5TB-4', 'Data/storage'],
             ]
         ),
-        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], 0,
+        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '+1215700',
             [
                 [28, 'DSC06979c.JPG', 1.6954341597253854275e+09, 1.69559020993184852597e+09, 7, 1215763, 'c81bb242e63bb1296fa1062fe5b3118f476193c9', 26, 2, 'DG-5TB-4', 'Data/storage'],
             ]
         ),
-        ('DG-5TB-4', False, 'DSC06979c.JPG', ['Data/*'], [], 0,
+        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '>1215700',
+            [
+                [28, 'DSC06979c.JPG', 1.6954341597253854275e+09, 1.69559020993184852597e+09, 7, 1215763, 'c81bb242e63bb1296fa1062fe5b3118f476193c9', 26, 2, 'DG-5TB-4', 'Data/storage'],
+            ]
+        ),
+        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '+1215800',
+            []
+        ),
+        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '>1215800',
+            []
+        ),
+        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '-1215800',
+            [
+                [28, 'DSC06979c.JPG', 1.6954341597253854275e+09, 1.69559020993184852597e+09, 7, 1215763, 'c81bb242e63bb1296fa1062fe5b3118f476193c9', 26, 2, 'DG-5TB-4', 'Data/storage'],
+            ]
+        ),
+        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '<1215800',
+            [
+                [28, 'DSC06979c.JPG', 1.6954341597253854275e+09, 1.69559020993184852597e+09, 7, 1215763, 'c81bb242e63bb1296fa1062fe5b3118f476193c9', 26, 2, 'DG-5TB-4', 'Data/storage'],
+            ]
+        ),
+        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '-1215700',
+            []
+        ),
+        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '<1215700',
+            []
+        ),
+        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '1215763',
+            [
+                [28, 'DSC06979c.JPG', 1.6954341597253854275e+09, 1.69559020993184852597e+09, 7, 1215763, 'c81bb242e63bb1296fa1062fe5b3118f476193c9', 26, 2, 'DG-5TB-4', 'Data/storage'],
+            ]
+        ),
+        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '<1215763',
+            []
+        ),
+        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '>1215763',
+            []
+        ),
+        ('DG-5TB-4', False, 'DSC06979c.JPG', ['Data/*'], [], '',
+            [
+                [28, 'DSC06979c.JPG', 1.6954341597253854275e+09, 1.69559020993184852597e+09, 7, 1215763, 'c81bb242e63bb1296fa1062fe5b3118f476193c9', 26, 2, 'DG-5TB-4', 'Data/storage'],
+            ]
+        ),
+        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '',
             [
                 [28, 'DSC06979c.JPG', 1.6954341597253854275e+09, 1.69559020993184852597e+09, 7, 1215763, 'c81bb242e63bb1296fa1062fe5b3118f476193c9', 26, 2, 'DG-5TB-4', 'Data/storage'],
             ]
