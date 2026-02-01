@@ -2,7 +2,7 @@ import logging
 import re
 from pathlib import Path
 from shutil import move
-from typing import Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Tuple
 
 from file_database import FileManagerDatabase
 from file_utils import get_disk_info
@@ -58,11 +58,14 @@ _MOVE_FS_RECORD = ("UPDATE `fsrecords` SET `ParentId` = ?, `Name` = ? "
                    "WHERE `ROWID` = ?")
 _FILD_SELECT = ("SELECT `fsrecords`.`ROWID`, `fsrecords`.`Name`, "
                 "`fsrecords`.`FileDate`, `fsrecords`.`SHA1ReadDate`, "
-                "`files`.`ROWID`, `files`.`FileSize`, `SHA1`, `ParentId`, `DiskId`"
+                "`files`.`ROWID`, `files`.`FileSize`, `SHA1`, `ParentId`, "
+                "`DiskId`, `Label`"
                 " FROM `fsrecords` LEFT JOIN `files`"
                 " ON `files`.`ROWID` = `fsrecords`.`FileId`"
-                " WHERE (`Name` LIKE ? OR `CanonicalName` LIKE ?) AND `fsrecords`.`FileId` IS {file}NULL"
-                " ORDER BY `Name`")
+                " LEFT JOIN `disks` ON `disks`.`ROWID` = `DiskId`"
+                " WHERE `Name` LIKE ?"
+                " AND `fsrecords`.`FileId` IS {file}NULL{disk_condition}"
+                " ORDER BY `DiskId`, `Name`,  `ParentId`")
 
 
 class FileUtils(FileManagerDatabase):
@@ -351,17 +354,23 @@ class FileUtils(FileManagerDatabase):
         return self.diff_dirs(disk1_name, dir1_id, disk2_name, dir2_id)
 
     def find(self, disk: str, dir: bool, name: str, include_path: list[str], exclude_path: list[str], size: str, print_sha: bool) -> int:
-        params = (name.replace("?", "_").replace("*", "%"),)
+        disk_ids = [row[0] for row in self._query_disks([disk])] if disk else []
+        name_param = name.replace("?", "_").replace("*", "%")
+        params = [name_param]
+        if disk_ids:
+            disk_condition = f" AND `DiskId` in (?{',?'*(len(disk_ids) - 1)})"
+            params.extend(disk_ids)
+        else:
+            disk_condition = ""
         matching_list = []
         for row in self._exec_query(
-                _FILD_SELECT.format(file="" if dir else "NOT "), params, commit=False):
-            path = self.get_path(row[7])
+                _FILD_SELECT.format(file="" if dir else "NOT ", disk_condition=disk_condition), params, commit=False):
+            path = self.get_path(row[7], disk_id=row[8])
             if include_path and not any(re.match(include_pattern.replace("?", ".").replace("*", ".*"), path) for include_pattern in include_path):
                 continue
             if exclude_path and any(re.match(exclude_pattern.replace("?", ".").replace("*", ".*"), path) for exclude_pattern in exclude_path):
                 continue
-            row[8] = path
-            matching_list.append(row)
+            matching_list.append([*row, path])
 
 
         print_find_results(matching_list, print_sha)
@@ -507,11 +516,11 @@ def print_dir_content(dir_path: str, dir_content: list[tuple[int, str, float, fl
         formats=formats, aligns=aligns)
 
 
-def print_find_results(find_results: list[tuple[int, str, float, float, int, int, str, int, str]], print_sha: bool) -> None:
-    headers = ["Name", "Path", "Size", "File Date", "Hash Date"]
+def print_find_results(find_results: list[list[Any]], print_sha: bool) -> None:
+    headers = ["Name", "Disk" "Path", "Size", "File Date", "Hash Date"]
     if print_sha:
         headers.append("SHA1")
-    indexes = [1, 8, 5, 2, 3, 6]
+    indexes = [1, 9, 10, 5, 2, 3, 6]
     formats: List[Callable] = [
         str,
         str,
@@ -520,7 +529,7 @@ def print_find_results(find_results: list[tuple[int, str, float, float, int, int
         timestamp2exif_str,
         str
     ]
-    aligns = ["<", "<", ">", ">", ">", "<"]
+    aligns = ["<", ">", "<", ">", ">", ">", "<"]
     print_table(
         find_results, headers, indexes=indexes,
         formats=formats, aligns=aligns)
