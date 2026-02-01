@@ -527,17 +527,18 @@ def print_dir_content(dir_path: str, dir_content: list[tuple[int, str, float, fl
 
 
 def print_find_results(find_results: list[list[Any]], print_sha: bool) -> None:
-    headers = ["Name", "Disk" "Path", "Size", "File Date", "Hash Date"]
+    headers = ["Name", "Disk", "Path", "Size", "File Date", "Hash Date"]
     if print_sha:
         headers.append("SHA1")
     indexes = [1, 9, 10, 5, 2, 3, 6]
     formats: List[Callable] = [
         str,
         str,
+        str,
         lambda x: str(x) if x else "dir",
         timestamp2exif_str,
         timestamp2exif_str,
-        str
+        lambda x: str(x) if x else "",
     ]
     aligns = ["<", ">", "<", ">", ">", ">", "<"]
     print_table(
