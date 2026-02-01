@@ -119,9 +119,13 @@ class FileManagerDatabase(SQLite3connection):
         self.mountpoint = Path(
                 file_utils.get_disk_info(self._disk_uuid)["mountpoint"])
 
-    def _save_path_cache(self, path_id: int, path: str) -> None:
+    def _save_path_cache(self, path_id: int, path: str, disk_id: int=0) -> None:
         """Updates id and path caches."""
-        self._id_cache[self._disk_id][path] = path_id
+        if not disk_id:
+            disk_id = self._disk_id
+        if disk_id not in self._id_cache:
+            self._id_cache[disk_id] = {}
+        self._id_cache[disk_id][path] = path_id
         self._path_cache[path_id] = path
 
     def handle_file_orfans(self, clear_orfan_files: bool = False) -> int:
@@ -258,8 +262,9 @@ class FileManagerDatabase(SQLite3connection):
                 self._save_path_cache(cur_path_id, cur_path)
         return cur_path_id
 
-    def get_path(self, fsrecord_id: int) -> str:
+    def get_path(self, fsrecord_id: int, disk_id: int=0) -> str:
         """Returns path of given fsrecord_id."""
+        logging.debug(f"Looking path for {fsrecord_id} on {disk_id}")
         cached_path = self._path_cache.get(fsrecord_id)
         if cached_path:
             return cached_path
@@ -271,7 +276,7 @@ class FileManagerDatabase(SQLite3connection):
             if row[0] is None or not row[1]:
                 fsrecord_path = ""
                 break
-            parent_path = self.get_path(row[0])
+            parent_path = self.get_path(row[0], disk_id=disk_id)
             if parent_path:
                 fsrecord_path = f"{parent_path}/{row[1]}"
             else:
@@ -280,7 +285,7 @@ class FileManagerDatabase(SQLite3connection):
         else:
             raise ValueError(f"Failed to find path for {fsrecord_id}")
 
-        self._save_path_cache(fsrecord_id, fsrecord_path)
+        self._save_path_cache(fsrecord_id, fsrecord_path, disk_id=disk_id)
         return fsrecord_path
 
     def query_files_on_disk(self, disk_id: int, file_id: List[str]) -> list[str]:
