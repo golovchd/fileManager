@@ -29,6 +29,8 @@ dir-commons:
     delete: ^Data/Photos
   - keep: ^Data/VirtualDrives
     delete: ^Data/Backup
+  - keep: ^Data/Work/.*Xperia
+    skip: ^Data/Backup
   - keep: ^Data/Work
     delete: ^Data/Backup
   - keep: ^Data/Backup/.*(?P<date>\d{4}-\d{2}-\d{2})((?!Xperia).)*$
