@@ -1,6 +1,7 @@
 """File database module."""
 
 import logging
+import re
 from pathlib import Path
 from time import time
 from typing import Dict, List, Optional, Tuple
@@ -10,10 +11,10 @@ from db_utils import SQLite3connection
 from utils import timestamp2exif_str
 
 DEFAULT_DATABASE = Path("/var/lib/file-manager/fileManager.db")
-
+_DISK_SIZE_DIFF_LIMIT = 0.005
 
 _DISK_SELECT = ("SELECT `ROWID`, `UUID`, `DiskSize`, `Label`"
-                " FROM `disks` WHERE `UUID` = ? OR `Label` = ?")
+                " FROM `disks` WHERE `UUID` IN (?{}) OR `Label` IN (?{})")
 _DISK_INSERT = ("INSERT INTO `disks` (`UUID`, `DiskSize`, `Label`) "
                 "VALUES (?, ?, ?)")
 
@@ -67,9 +68,18 @@ _FS_FILE_SELECT = ("SELECT `fsrecords`.`ROWID`, `fsrecords`.`SHA1ReadDate`, "
                    " ON `files`.`ROWID` = `fsrecords`.`FileId`"
                    " WHERE `DiskId` = ? AND `ParentId` = ? AND `Name` = ?"
                    " AND `FileId` IS NOT NULL")
+_FILE_ON_DISK_SELECT = ("SELECT `fsrecords`.`ROWID`, `fsrecords`.`SHA1ReadDate`, "
+                        "`fsrecords`.`FileDate`, `ParentId`, "
+                        "`files`.`FileSize`, `SHA1`"
+                        "FROM `fsrecords` INNER JOIN `files` "
+                        "ON `files`.`ROWID` = `fsrecords`.`FileId` "
+                        "WHERE `DiskId` = ? AND `FileId` IN(?{})")
 _SELECT_SUBDIRS = ("SELECT `ROWID`, `Name`, `ParentId` FROM `fsrecords` "
                    "WHERE `ParentId` IN(?{}) AND `FileId` IS NULL "
                    "ORDER BY `ParentId`, `Name`")
+
+_DELETE_DISK_FSRECORDS = "DELETE FROM `fsrecords` WHERE `DiskId` = ?"
+_DELETE_DISK = "DELETE FROM `disks` WHERE `UUID` = ? AND `ROWID` = ?"
 
 
 class FileManagerDatabase(SQLite3connection):
@@ -109,9 +119,13 @@ class FileManagerDatabase(SQLite3connection):
         self.mountpoint = Path(
                 file_utils.get_disk_info(self._disk_uuid)["mountpoint"])
 
-    def _save_path_cache(self, path_id: int, path: str) -> None:
+    def _save_path_cache(self, path_id: int, path: str, disk_id: int=0) -> None:
         """Updates id and path caches."""
-        self._id_cache[self._disk_id][path] = path_id
+        if not disk_id:
+            disk_id = self._disk_id
+        if disk_id not in self._id_cache:
+            self._id_cache[disk_id] = {}
+        self._id_cache[disk_id][path] = path_id
         self._path_cache[path_id] = path
 
     def handle_file_orfans(self, clear_orfan_files: bool = False) -> int:
@@ -148,12 +162,15 @@ class FileManagerDatabase(SQLite3connection):
                 tuple(orfans_list), commit=True)
         return orfans_count
 
+    def _query_disks(self, names: List[str]) -> List[List[str]]:
+        return  self._exec_query(_DISK_SELECT.format(",?" * (len(names) - 1), ",?" * (len(names) - 1)), (*names, *names), commit=False)
+
     def set_disk(self, uuid: str, size: int, label: str) -> None:
         """Create/update disk details in DB."""
-        for row in self._exec_query(_DISK_SELECT, (uuid, uuid), commit=False):
-            self._set_disk(row[0], row[1], size, label)
+        for row in self._query_disks([uuid, uuid]):
+            self._set_disk(int(row[0]), row[1], int(size), label)
             # TODO: support free disk space tracking in DB
-            if row[2] != size or row[3] != label:
+            if abs(float(row[2]) / float(size) - 1) > _DISK_SIZE_DIFF_LIMIT or row[3] != label:
                 logging.error("Size or label of disk UUID %s changed: "
                               "%d -> %d, %s -> %s",
                               uuid, row[2], size, row[3], label)
@@ -166,8 +183,8 @@ class FileManagerDatabase(SQLite3connection):
             self.set_disk(uuid, size, label)
 
     def set_disk_by_name(self, name: str) -> None:
-        for row in self._exec_query(_DISK_SELECT, (name, name), commit=False):
-            self._set_disk(row[0], row[1], row[2], row[3])
+        for row in self._query_disks([name]):
+            self._set_disk(int(row[0]), row[1], int(row[2]), row[3])
             self.set_top_dir()
             break
         else:
@@ -245,8 +262,9 @@ class FileManagerDatabase(SQLite3connection):
                 self._save_path_cache(cur_path_id, cur_path)
         return cur_path_id
 
-    def get_path(self, fsrecord_id: int) -> str:
+    def get_path(self, fsrecord_id: int, disk_id: int=0) -> str:
         """Returns path of given fsrecord_id."""
+        logging.debug(f"Looking path for {fsrecord_id} on {disk_id}")
         cached_path = self._path_cache.get(fsrecord_id)
         if cached_path:
             return cached_path
@@ -258,7 +276,7 @@ class FileManagerDatabase(SQLite3connection):
             if row[0] is None or not row[1]:
                 fsrecord_path = ""
                 break
-            parent_path = self.get_path(row[0])
+            parent_path = self.get_path(row[0], disk_id=disk_id)
             if parent_path:
                 fsrecord_path = f"{parent_path}/{row[1]}"
             else:
@@ -267,8 +285,30 @@ class FileManagerDatabase(SQLite3connection):
         else:
             raise ValueError(f"Failed to find path for {fsrecord_id}")
 
-        self._save_path_cache(fsrecord_id, fsrecord_path)
+        self._save_path_cache(fsrecord_id, fsrecord_path, disk_id=disk_id)
         return fsrecord_path
+
+    def query_files_on_disk(self, disk_id: int, file_id: List[str]) -> list[str]:
+        result = []
+        shards_count = 1 + (len(file_id) + 1) // self.SQLITE_LIMIT_VARIABLE_NUMBER
+        shard_size = len(file_id) // shards_count
+        logging.debug(f"query_files_on_disk: SQLITE_LIMIT_VARIABLE_NUMBER={self.SQLITE_LIMIT_VARIABLE_NUMBER}, len(file_id)={len(file_id)}, shards_count={shards_count}, shard_size={shard_size}")
+        for i in range(shards_count):
+            for row in self._exec_query(_FILE_ON_DISK_SELECT.format(",?" * (shard_size - 1)), (disk_id, *file_id[i*shard_size:(i+1)*shard_size]), commit=False):
+                result.append(self.get_path(row[0]))
+            logging.debug(f"query_files_on_disk: got {len(result)} records after shard {i}")
+        return result
+
+    def get_file_path_on_disk(self, file_id: List[str], disks: List[str], parent_root_path: Optional[str]= None, exclude_path: Optional[list[str]]= None) -> Dict[str, List[str]]:
+        """Return path on disk of specific file_id."""
+        if not file_id:
+            return {}
+        disk_labels = {row[0]: row[3] for row in self._query_disks(disks)}
+        path_on_disk: Dict[str, List[str]] = {disk_label: [] for disk_label in disk_labels.values()}
+        for disk_id, disk_label in disk_labels.items():
+            all_path_on_disk = self.query_files_on_disk(int(disk_id), file_id)
+            path_on_disk[disk_label].extend([path for path in all_path_on_disk if (not parent_root_path or path.startswith(f"{parent_root_path}/")) and not any(re.match(exclude_pattern, path) for exclude_pattern in exclude_path or [])])
+        return path_on_disk
 
     def query_subdirs(self, dir: int, recursively: bool = False) -> List[int]:
         """Queries files of given pair of dirs."""
@@ -360,3 +400,34 @@ class FileManagerDatabase(SQLite3connection):
                 _FSFILE_INSERT,
                 (file_name, self._cur_dir_id, self._disk_id, mtime, file_id,
                  time()))
+
+    def get_path_on_disk(self, disk: str, path: str) -> int:
+        """Returns dir_id of the path on disk."""
+        self.set_disk_by_name(disk)
+        try:
+            dir_id = self.get_dir_id(path.split('/'), insert_dirs=False)
+            logging.debug("Found dir {path} with ID {dir_id} on disk {disk}")
+            return dir_id
+        except ValueError:
+            return 0
+
+    def delete_disk(self, disk: str, clear_orfan_files: bool, force: bool) -> int:
+        disk_ids = {row[0]: row[1] for row in self._query_disks([disk])}
+        if not disk_ids:
+            logging.error(f"Failed to find disk {disk} in database")
+            return 1
+        if len(disk_ids) > 1:
+            logging.error(f"Disk param {disk} returns more than one disk with UUIDs {','.join(disk_ids.values())} from database")
+            return 2
+        for disk_id, disk_uuid in disk_ids.items():
+            if not force and not file_utils.get_confirmation(f"Please confirm delete from DB disk {disk} with UUID {disk_uuid}. Type 'delete': ", ['delete']):
+                logging.warning(f"Did not get confirmation for disk {disk} deletion, exiting")
+                return 3
+            logging.info(f"Deleting file records associated with disk {disk}, UUID {disk_uuid}, DiskId {disk_id}...")
+            self._exec_query(_DELETE_DISK_FSRECORDS, (disk_id, ))
+            logging.info(f"Deleting disk {disk}, UUID {disk_uuid}, DiskId {disk_id}...")
+            self._exec_query(_DELETE_DISK, (disk_uuid, disk_id))
+            logging.info(f"Disk {disk}, UUID {disk_uuid}, DiskId {disk_id} was deleted from DB with all file records")
+            self.handle_file_orfans(clear_orfan_files=clear_orfan_files)
+
+        return 0

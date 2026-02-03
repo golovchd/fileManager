@@ -10,8 +10,9 @@ TEST_DATA_DIR = SCRIPT_DIR.parent / "test_data"
 sys.path.append(str(SCRIPT_DIR.parent))
 
 from file_utils import (convert_to_bytes, generate_file_sha1,  # noqa: E402
-                        get_full_dir_path, get_mount_path, get_path_disk_info,
-                        get_path_from_mount, read_dir, read_file)
+                        get_confirmation, get_full_dir_path, get_mount_path,
+                        get_path_disk_info, get_path_from_mount, read_dir,
+                        read_file)
 
 
 @pytest.mark.parametrize(
@@ -209,7 +210,7 @@ def test_read_file(
                 b'      {',
                 b'         "uuid": "F2FC151BAC04DF13",',
                 b'         "label": "My Backup 8",',
-                b'         "fssize": "6001039241216",',
+                b'         "size": "6001039241216",',
                 b'         "mountpoint": "/media/user/My Backup 8"',
                 b'      }',
                 b'   ]',
@@ -228,7 +229,7 @@ def test_read_file(
                 b'      {',
                 b'         "uuid": "",',
                 b'         "label": "My Backup 8",',
-                b'         "fssize": "2000397881344",',
+                b'         "size": "2000397881344",',
                 b'         "mountpoint": "/media/user/My Backup 8"',
                 b'      }',
                 b'   ]',
@@ -277,3 +278,16 @@ def test_get_path_disk_info(
     assert disk_info["label"] == label
     assert disk_info["size"] == size
     assert len(disk_info.keys()) == 3
+
+
+@pytest.mark.parametrize(
+    "reply_input, accepted_choices, result",
+    [
+        ("delete", ["delete"], True),
+        ("delete", ["delete", "Delete"], True),
+        ("yes", ["delete"], False),
+    ]
+)
+def test_get_confirmation(mocker, reply_input: str, accepted_choices: list[str], result: bool) -> None:
+    mocker.patch('file_utils.input', lambda x: reply_input)
+    assert get_confirmation("test", accepted_choices) == result

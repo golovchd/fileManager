@@ -72,7 +72,7 @@ def get_disk_info(uuid: str) -> Dict[str, Any]:
 
 
 def get_lsblk() -> List[Dict[str, str]]:
-    uuid_cmd = ["lsblk", "-a", "--output=UUID,LABEL,FSSIZE,MOUNTPOINT",
+    uuid_cmd = ["lsblk", "-a", "--output=UUID,LABEL,SIZE,MOUNTPOINT",
                 "--json", "--bytes"]
     lsblk_info = json.loads(subprocess.check_output(uuid_cmd).decode(
                              sys.stdin.encoding))
@@ -87,7 +87,7 @@ def get_path_disk_info(dir_path: Path) -> Dict[str, Any]:
         if device_info["mountpoint"] == mount_path:
             return {
                 "uuid": device_info["uuid"],
-                "size": int(device_info["fssize"]) // 1024,
+                "size": int(device_info.get("fssize", device_info.get("size", 0))) // 1024,
                 "label": device_info["label"] or "",
             }
     raise ValueError(f"Failed to locate device for path {dir_path}")
@@ -104,7 +104,7 @@ def read_dir(dir_path: Path) -> Tuple[List[str], List[str]]:
         logging.debug(f"read_dir({dir_path}) dirs: {dirs}, files: {files}")
         return files, dirs
     except PermissionError:
-        logging.exception(f"read_dir failed to read {dir_path}")
+        logging.warning(f"read_dir missing permission to read {dir_path}")
         return [], []
 
 
@@ -121,7 +121,8 @@ def generate_file_sha1(
                     break
                 sha1_hash.update(buffer)
     except PermissionError:
-        logging.exception(f"generate_file_sha1 failed to read {file_path}")
+        logging.warning(
+                f"generate_file_sha1 missing permission to read {file_path}")
         return "", 0
     except OSError:
         logging.exception(f"generate_file_sha1 failed to read {file_path}")
@@ -154,3 +155,6 @@ def read_file(
         file_name, file_type, file_stat.st_size, file_stat.st_mtime,
         sha1_hex, hash_time
     )
+
+def get_confirmation(message: str, accepted_choices: list[str]) -> bool:
+    return input(message) in accepted_choices
