@@ -78,3 +78,8 @@ repos:
       - id: yamlfmt
         args: [--mapping=2, --sequence=4, --offset=2, --implicit_start, --preserve-quotes]
         additional_dependencies: [ruamel.yaml==0.17.21]
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    # uv version.
+    rev: 0.10.2
+    hooks:
+      - id: uv-lock
