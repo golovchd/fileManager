@@ -480,7 +480,7 @@ def parse_arguments(argv: List[str]) -> argparse.Namespace:
     ]
     arg_parser = argparse.ArgumentParser(
         description='Import photos from media to storage')
-    arg_parser.add_argument('--config', type=Path, help='Path to config file',
+    arg_parser.add_argument('--config', type=Path, help=f'Path to config file, default is {_DEFAULT_CONFIG.relative_to(Path.cwd())}',
                             default=_DEFAULT_CONFIG)
     arg_parser.add_argument('--media', type=Path, default=None,
                             help='Media to import files from')

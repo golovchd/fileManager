@@ -30,7 +30,6 @@ def convert_to_bytes(size: str) -> int:
     match = re.match(_SIZE_REGEX, size)
     if not match:
         raise ValueError(f"{size} is not correct size designation")
-    print(match)
     return (int(
             float(match.group("number")) * _BYTES_SCALE[match.group("scale")])
             if match.group("scale") else int(match.group("int")))
