@@ -22,6 +22,8 @@ from utils import float2timestamp, timeobj2exif_str
 _COMPARE_TIME_DIFF = timedelta(2)  # 2 days
 _DEFAULT_CONFIG = Path(__file__).absolute().parent / "import_config.yaml"
 
+_FILE_DATETIME_CACHE : dict[str, str] = {}
+
 
 class ExifTimeError(Exception):
     """Unable to read Exif Time from media file error."""
@@ -55,6 +57,9 @@ def exif_time2unix(exif_time):
 
 def read_file_time(file_name, exif_only=False):
     """Returns file's time from exif or from mtime."""
+    if file_name in _FILE_DATETIME_CACHE:
+        return _FILE_DATETIME_CACHE[file_name]
+
     file_time = None
     if file_type_from_name(file_name) in MediaFiles.default_types['photo']:
         with open(file_name, 'rb') as file_obj:
@@ -73,6 +78,7 @@ def read_file_time(file_name, exif_only=False):
     else:
         file_timestamp = exif_time2unix(file_time)
         logging.debug(f"{file_name} exif as file_time {file_time}")
+    _FILE_DATETIME_CACHE[file_name] = file_timestamp
     return file_timestamp
 
 
@@ -363,13 +369,14 @@ def get_import_list(
         count += 1
         logging.info(f"Processing {file_name} {count}/{media.count}")
         storage_dir = storage.find_file_on_media(file_name, file_path)
+        file_datetime = read_file_time(f"{file_path}/{file_name}")
         if storage_dir:
             present_count += 1
             already_imported_files[file_name] = storage_dir
-            logging.info(f"{file_name} present in {storage_dir}")
+            logging.info(f"{file_name}, date/time {file_datetime} present in {storage_dir}")
         else:
             not_imported_files.append(file_name)
-            logging.info(f"{file_name} NOT present in storage")
+            logging.info(f"{file_name}, date/time {file_datetime} NOT present in storage {storage_root}")
     logging.info(f"{media_root} contain {media.count} files, "
                  f"{(count - present_count)} not present in {storage_root}")
     return (not_imported_files, already_imported_files)
