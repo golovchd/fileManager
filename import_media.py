@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 import exifread
 from yaml import Loader, load
@@ -140,7 +139,7 @@ class MediaType(Enum):
 class MediaConfig:
     name: str
     label: str
-    types: List[MediaType]
+    types: list[MediaType]
 
 
 class ImportConfig:
@@ -148,12 +147,12 @@ class ImportConfig:
         self.config = load(config_file.read_text("utf-8"), Loader=Loader)
 
     @property
-    def storage_regex_list(self) -> List[str]:
+    def storage_regex_list(self) -> list[str]:
         return self.config.get("storage-config", {}).get(
                 "storage-includes", ["^not-a-disk$"])
 
     @property
-    def free_space_limits(self) -> Dict[str, int]:
+    def free_space_limits(self) -> dict[str, int]:
         if "free-space-limit" not in self.config.get("storage-config", {}):
             return {}
         free_space_limits = {}
@@ -168,7 +167,7 @@ class ImportConfig:
         return free_space_limits
 
     @property
-    def media_config(self) -> Dict[str, MediaConfig]:
+    def media_config(self) -> dict[str, MediaConfig]:
         if "media-config" not in self.config:
             return {}
         return {
@@ -338,7 +337,7 @@ class MediaFiles:
 
 def get_import_list(
         media_root: Path, storage_root: Path, filter_storage: bool = True
-        ) -> Tuple[List[Path], Dict[str, Path]]:
+        ) -> tuple[list[Path], dict[str, Path]]:
     """Generating list of files to import.
 
       Collecting list of files with supported types from media_root and looking
@@ -349,14 +348,14 @@ def get_import_list(
         storage_root: path to destination dir
         filter_storage: if True processing only MediaFiles.storage_dirs
       Returns:
-        Tuple, list of files from media_root tree not found in storage_root and
+        tuple, list of files from media_root tree not found in storage_root and
         dictionary with files from media_root as keys and their matches in
         storage_root tree
     """
     media = MediaFiles(media_root)
     media.import_media()
-    already_imported_files: Dict[str, Path] = {}
-    not_imported_files: List[Path] = []
+    already_imported_files: dict[str, Path] = {}
+    not_imported_files: list[Path] = []
     logging.info(f"{media_root} contain {media.count} files")
     if not media.count:
         return (not_imported_files, already_imported_files)
@@ -396,7 +395,7 @@ def print_time(path):
 
 
 def have_enough_free_space(
-        storage_mount: str, free_space_limit: Dict[str, int]) -> bool:
+        storage_mount: str, free_space_limit: dict[str, int]) -> bool:
     """Checks if storage_mount comply to free_space_limit"""
     if not free_space_limit:
         logging.debug(f"No free space requirements for {storage_mount}")
@@ -414,8 +413,8 @@ def have_enough_free_space(
 
 
 def get_storages(
-        storage_regex_list: List[str],
-        free_space_limit: Dict[str, int]) -> List[Path]:
+        storage_regex_list: list[str],
+        free_space_limit: dict[str, int]) -> list[Path]:
     """Returns currently mounted strages that comply to config"""
     logging.debug(f"storage_regex_list: {storage_regex_list}")
     return [
@@ -430,7 +429,7 @@ def get_storages(
 
 
 def get_media_list(
-        media_config: Dict[str, MediaConfig]) -> Dict[Path, MediaConfig]:
+        media_config: dict[str, MediaConfig]) -> dict[Path, MediaConfig]:
     logging.debug(media_config)
     return {
         Path(device_info["mountpoint"]):
@@ -459,7 +458,7 @@ def import_action(args: argparse.Namespace) -> int:
         logging.critical("Failed to find media location.")
         return 1
     for storage in storages:
-        files_to_import: List[Path] = []
+        files_to_import: list[Path] = []
         for media in media_list:
             files_to_import.extend(get_import_list(
                 media, storage, filter_storage=args.import_all)[0])
@@ -479,7 +478,7 @@ def print_time_action(args: argparse.Namespace):
         print_time(args.storage)
 
 
-def parse_arguments(argv: List[str]) -> argparse.Namespace:
+def parse_arguments(argv: list[str]) -> argparse.Namespace:
     """Definiing and parsing arguments."""
     actions = [
         'import',
@@ -508,7 +507,7 @@ def parse_arguments(argv: List[str]) -> argparse.Namespace:
     return arg_parser.parse_args(args=argv)
 
 
-def main(argv: List[str]) -> int:
+def main(argv: list[str]) -> int:
     """Module as util use wrapper."""
     args = parse_arguments(argv)
     logging.basicConfig(
