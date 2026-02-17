@@ -15,13 +15,13 @@ from pathlib import Path
 import exifread
 from yaml import Loader, load
 
-from file_utils import convert_to_bytes, get_lsblk, get_mount_path
+from file_utils import convert_to_bytes, get_lsblk
 from utils import float2timestamp, timeobj2exif_str
 
 _COMPARE_TIME_DIFF = timedelta(2)  # 2 days
 _DEFAULT_CONFIG = Path(__file__).absolute().parent / "import_config.yaml"
 
-_FILE_DATETIME_CACHE : dict[str, str] = {}
+_FILE_DATETIME_CACHE : dict[str, datetime] = {}
 
 
 class ExifTimeError(Exception):
@@ -32,14 +32,13 @@ class IterateDir(Exception):
     """End of directory loop exception."""
 
 
-def file_type_from_name(file_name):
+def file_type_from_name(file_path: Path):
     """Returns file's extension."""
-    return os.path.splitext(file_name)[1][1:].lower()
+    return file_path.suffix[1:].lower()
 
 
-def exif_time2unix(exif_time):
+def exif_time2unix(exif_time_str: str) -> datetime:
     """Converts exif_time to datetime.datetime object."""
-    exif_time_str = str(exif_time)
     if len(exif_time_str) != 19:
         raise ExifTimeError(f'unexpectef ExifTime {exif_time_str}')
     exif_time_str = exif_time_str.replace(' ', ':', 1)
@@ -54,34 +53,33 @@ def exif_time2unix(exif_time):
                     int(exif_time_parts[5]))
 
 
-def read_file_time(file_name, exif_only=False):
+def read_file_time(file_path: Path, exif_only: bool=False) -> datetime:
     """Returns file's time from exif or from mtime."""
-    if file_name in _FILE_DATETIME_CACHE:
-        return _FILE_DATETIME_CACHE[file_name]
+    if str(file_path) in _FILE_DATETIME_CACHE:
+        return _FILE_DATETIME_CACHE[str(file_path)]
 
     file_time = None
-    if file_type_from_name(file_name) in MediaFiles.default_types['photo']:
-        with open(file_name, 'rb') as file_obj:
+    if file_type_from_name(file_path) in MediaFiles.default_types['photo']:
+        with open(file_path, 'rb') as file_obj:
             tags = exifread.process_file(file_obj, details=False)
-            logging.debug(f"{file_name} tags {tags}")
+            logging.debug(f"{file_path} tags {tags}")
 
-        file_time = tags.get('EXIF DateTimeOriginal',
-                             tags.get('Image DateTime', None))
+        file_time = tags.get('EXIF DateTimeOriginal', tags.get('Image DateTime', None))
     if not file_time:
         if exif_only:
-            raise ExifTimeError(f"unable to read ExifTime from {file_name}")
-        file_timestamp = float2timestamp(os.stat(file_name).st_mtime)
+            raise ExifTimeError(f"unable to read ExifTime from {file_path}")
+        file_timestamp = float2timestamp(file_path.stat().st_mtime)
         logging.debug(
-            f"{file_name} mtime as file_time "
+            f"{file_path} mtime as file_time "
             f"{timeobj2exif_str(file_timestamp)}")
     else:
-        file_timestamp = exif_time2unix(file_time)
-        logging.debug(f"{file_name} exif as file_time {file_time}")
-    _FILE_DATETIME_CACHE[file_name] = file_timestamp
+        file_timestamp = exif_time2unix(str(file_time))
+        logging.debug(f"{file_path} exif as file_time {file_time}")
+    _FILE_DATETIME_CACHE[str(file_path)] = file_timestamp
     return file_timestamp
 
 
-def compare_files(file_name_1, dir_path_1, dir_path_2, file_name_2=None):
+def compare_files(file_name_1: str, dir_path_1: Path, dir_path_2: Path, file_name_2: str='') -> bool:
     """Media files comparator.
 
     Files are matching if:
@@ -98,13 +96,13 @@ def compare_files(file_name_1, dir_path_1, dir_path_2, file_name_2=None):
     Returns:
       True if files match, False otherwise.
     """
-    file_type = file_type_from_name(file_name_1)
+    file_type = file_type_from_name(Path(file_name_1))
     if not file_name_2:
         file_name_2 = file_name_1
-    elif file_type != file_type_from_name(file_name_2):
+    elif file_type != file_type_from_name(Path(file_name_2)):
         return False
-    file_path_1 = os.path.join(dir_path_1, file_name_1)
-    file_path_2 = os.path.join(dir_path_2, file_name_2)
+    file_path_1 = dir_path_1 / file_name_1
+    file_path_2 = dir_path_2 / file_name_2
     stat_1 = os.stat(file_path_1)
     stat_2 = os.stat(file_path_2)
     if file_type not in MediaFiles.default_types['photo']:
@@ -178,54 +176,6 @@ class ImportConfig:
         }
 
 
-class MediaFilesIterator:
-    """Iterator class for MediaFiles."""
-    def __init__(self, media):
-        self.media = media
-        self.dir_names = self.media.get_all_dir_names()
-        self.dir_idx = 0
-        self.dir_count = len(self.dir_names)
-        self.file_idx = 0
-        self._init_dir()
-
-    def __iter__(self):
-        """Iterator __iter__ method."""
-        return self
-
-    def _init_dir(self, stop_iteration=False):
-        """Switching to next dir or resetting iterator."""
-        if self.dir_idx < self.dir_count:
-            self.cur_dir = self.media.get_dir_files(
-                self.dir_names[self.dir_idx])
-            self.cur_dir_count = len(self.cur_dir)
-            self.file_idx = 0
-        else:
-            self.cur_dir = None
-            self.cur_dir_count = 0
-            if stop_iteration:
-                raise StopIteration()
-
-    def _next_file(self, stop_iteration=False):
-        """Returns next file from current dir."""
-        if self.file_idx < self.cur_dir_count:
-            file_name = self.cur_dir[self.file_idx]
-            self.file_idx += 1
-            return (self.dir_names[self.dir_idx], file_name)
-        if stop_iteration:
-            raise StopIteration()
-        else:
-            raise IterateDir()
-
-    def __next__(self):
-        """Iterator next method."""
-        try:
-            return self._next_file()
-        except IterateDir:
-            self.dir_idx += 1
-            self._init_dir(True)
-            return self._next_file()
-
-
 class MediaFiles:
     """Iterable representation of dir tree and files located in that tree."""
     default_types = {
@@ -234,15 +184,20 @@ class MediaFiles:
     }
     storage_dirs = ['Photos', 'Videos']
 
-    def __init__(self, root, types=None):
-        self.root = root
-        self.count = 0
+    def __init__(self, root: Path, types=None):
+        if root.is_dir():
+            self.root = root
+            self.count = 0
+            self.import_list: dict[str, list[str]] = {}
+        else:
+            self.root = root.parent
+            self.count = 1
+            self.import_list = {str(root.parent): [root.name]}
         if types:
             self.types = types
         else:
             self.types = MediaFiles.default_types
         self.set_all_types()
-        self.import_list = {}
 
     def __iter__(self):
         """Returns iterator."""
@@ -254,9 +209,9 @@ class MediaFiles:
         for _, types in self.types.items():
             self.all_types.extend(types)
 
-    def is_importable(self, filename):
+    def is_importable(self, filename: str) -> bool:
         """Checking if type of given filename is in self.all_types."""
-        file_type = file_type_from_name(filename)
+        file_type = file_type_from_name(Path(filename))
         return file_type in self.all_types
 
     def get_all_dir_names(self):
@@ -269,33 +224,33 @@ class MediaFiles:
             return self.import_list[dir_name]
         return []
 
-    def import_dir_files(self, dir_path, files_list):
+    def import_dir_files(self, dir_path: Path, files_list: list[str]):
         """Filter importable files from files_list and save to
            self.import_list."""
         dir_list = []
         for file_name in files_list:
             if (self.is_importable(file_name) and not (
-                  Path(dir_path) / file_name).is_symlink()):
+                  dir_path / file_name).is_symlink()):
                 dir_list.append(file_name)
         dir_count = len(dir_list)
         if dir_count:
             logging.debug(f"loading {dir_count} files from {dir_path}")
-            self.import_list[dir_path] = dir_list
+            self.import_list[str(dir_path)] = dir_list
             self.count += dir_count
 
-    def import_media(self, filter_storage=False):
+    def import_media(self, filter_storage: bool=False) -> int:
         """Read dirs under self.root and import files from each dir."""
-        if filter_storage:
-            dir_list = MediaFiles.storage_dirs
-        else:
-            dir_list = ['']
-        for dir_name in dir_list:
-            for root, _, files in os.walk(os.path.join(self.root, dir_name)):
+        if self.count > 0:
+            return self.count
+
+        dir_list =  [self.root / dir for dir in MediaFiles.storage_dirs] if filter_storage else [self.root]
+        for dir_path in dir_list:
+            for root, _, files in dir_path.walk():
                 self.import_dir_files(root, files)
         return self.count
 
-    def find_file_on_media(self, file_name, file_path,
-                           only_same_names=True, find_all=False):
+    def find_file_on_media(self, file_name: str, file_path: Path,
+                           only_same_names: bool=True, find_all:bool=False):
         """Looks for file_name on current media.
           Reterning path to found copy. Order is not guaranteed.
 
@@ -311,14 +266,15 @@ class MediaFiles:
           If find_all=False list will be returned, empty list if not found."""
 
         copies_list = []
-        for dir_path, files in self.import_list.items():
-            # Skip Matching dirs to themselves, will allow import frsom subdirs
+        for dir, files in self.import_list.items():
+            # Skip Matching dirs to themselves, will allow import from subdirs
+            dir_path = Path(dir)
             if dir_path == file_path:
                 continue
             if only_same_names:
                 if (file_name in files and file_path and
                         compare_files(file_name, file_path, dir_path)):
-                    found_path = os.path.join(dir_path, file_name)
+                    found_path = dir_path / file_name
                     if find_all:
                         copies_list.append(found_path)
                     else:
@@ -327,12 +283,60 @@ class MediaFiles:
                 for storage_name in files:
                     if compare_files(
                             file_name, file_path, dir_path, storage_name):
-                        found_path = os.path.join(dir_path, storage_name)
+                        found_path = dir_path / storage_name
                         if find_all:
                             copies_list.append(found_path)
                         else:
                             return found_path
         return copies_list if find_all else None
+
+
+class MediaFilesIterator:
+    """Iterator class for MediaFiles."""
+    def __init__(self, media: MediaFiles) -> None:
+        self.media = media
+        self.dir_names = self.media.get_all_dir_names()
+        self.dir_idx = 0
+        self.dir_count = len(self.dir_names)
+        self.file_idx = 0
+        self._init_dir()
+
+    def __iter__(self):
+        """Iterator __iter__ method."""
+        return self
+
+    def _init_dir(self, stop_iteration:bool=False) -> None:
+        """Switching to next dir or resetting iterator."""
+        if self.dir_idx < self.dir_count:
+            self.cur_dir = self.media.get_dir_files(
+                self.dir_names[self.dir_idx])
+            self.cur_dir_count = len(self.cur_dir)
+            self.file_idx = 0
+        else:
+            self.cur_dir = None
+            self.cur_dir_count = 0
+            if stop_iteration:
+                raise StopIteration()
+
+    def _next_file(self, stop_iteration:bool=False) -> tuple[Path, str]:
+        """Returns next file from current dir."""
+        if self.file_idx < self.cur_dir_count:
+            file_name = self.cur_dir[self.file_idx]
+            self.file_idx += 1
+            return (Path(self.dir_names[self.dir_idx]), file_name)
+        if stop_iteration:
+            raise StopIteration()
+        else:
+            raise IterateDir()
+
+    def __next__(self) -> tuple[Path, str]:
+        """Iterator next method."""
+        try:
+            return self._next_file()
+        except IterateDir:
+            self.dir_idx += 1
+            self._init_dir(True)
+            return self._next_file()
 
 
 def get_import_list(
@@ -368,7 +372,7 @@ def get_import_list(
         count += 1
         logging.info(f"Processing {file_name} {count}/{media.count}")
         storage_dir = storage.find_file_on_media(file_name, file_path)
-        file_datetime = read_file_time(f"{file_path}/{file_name}")
+        file_datetime = read_file_time(Path(file_path) / file_name)
         if storage_dir:
             present_count += 1
             already_imported_files[file_name] = storage_dir
@@ -381,16 +385,13 @@ def get_import_list(
     return (not_imported_files, already_imported_files)
 
 
-def print_time(path):
+def print_time(path: Path) -> None:
     """Prints time information of file or all files in dir."""
-    if os.path.isdir(path):
-        media = MediaFiles(path)
-        media.import_media()
-    else:
-        media = [(os.path.split(path))]
+    media = MediaFiles(path)
+    media.import_media()
     logging.debug(media)
     for media_file in media:
-        file_path = os.path.join(media_file[0], media_file[1])
+        file_path = media_file[0] / media_file[1]
         logging.info(f"file_time({file_path})={read_file_time(file_path)}")
 
 
@@ -443,7 +444,7 @@ def get_media_list(
 def import_action(args: argparse.Namespace) -> int:
     """Implementation of import action."""
     config = ImportConfig(args.config)
-    storages = ([get_mount_path(args.storage)]
+    storages = ([args.storage]
                 if args.storage else get_storages(
                         config.storage_regex_list, config.free_space_limits))
     if not storages:

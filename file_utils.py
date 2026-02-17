@@ -46,6 +46,7 @@ def get_full_dir_path(path: Path) -> Path:
 def get_mount_path(dir_path: Path) -> Path:
     """Returning path of mount point for given dir."""
     logging.debug(f"get_mount_path for {dir_path}")
+    dir_path = dir_path.resolve()
     if not dir_path.is_dir():
         raise ValueError(
             f"Could not get mount path of non-existent {dir_path}")
