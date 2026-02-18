@@ -182,7 +182,7 @@ class MediaFiles:
         'photo': ['jpg', 'arw', 'png', 'raw'],
         'video': ['mts', 'mp4', 'mov']
     }
-    storage_dirs = ['Photos', 'Videos']
+    storage_dirs = ['Data/Photos', 'Data/Videos']
 
     def __init__(self, root: Path, types=None):
         if root.is_dir():
@@ -244,6 +244,7 @@ class MediaFiles:
             return self.count
 
         dir_list =  [self.root / dir for dir in MediaFiles.storage_dirs] if filter_storage else [self.root]
+        logging.info(f"Import media {self.root} from {dir_list}")
         for dir_path in dir_list:
             for root, _, files in dir_path.walk():
                 self.import_dir_files(root, files)
@@ -462,7 +463,7 @@ def import_action(args: argparse.Namespace) -> int:
         files_to_import: list[Path] = []
         for media in media_list:
             files_to_import.extend(get_import_list(
-                media, storage, filter_storage=args.import_all)[0])
+                media, storage, filter_storage=not args.check_entire_storage)[0])
     logging.info(files_to_import)
     return 0
 
@@ -496,13 +497,13 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
     arg_parser.add_argument('--action', help='Action to perform',
                             choices=actions, default='import')
     arg_parser.add_argument(
-        '--import_all',
-        help='Import all files regardless of presence in storage',
+        '--check-entire-storage',
+        help='Load data from entire storage, not only from Photos/Videos locations',
         action="store_true", default=False)
     arg_parser.add_argument('-v', '--verbose',
                             help='Print verbose output',
                             action='count', default=0)
-    arg_parser.add_argument('--dry_run',
+    arg_parser.add_argument('--dry-run',
                             help='Print action instead of executing it',
                             action="store_true", default=False)
     return arg_parser.parse_args(args=argv)
