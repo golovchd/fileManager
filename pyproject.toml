@@ -1,0 +1,7 @@
+[project]
+name = "File_Manager"
+version = "0.1.0"
+description = "Managing files across multiple disks"
+readme = "README.md"
+requires-python = ">= 3.10"
+dependencies = [ "ExifRead==3.5.1", "PyYAML==6.0.3" ]
