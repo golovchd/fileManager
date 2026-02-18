@@ -136,7 +136,7 @@ class MediaType(Enum):
 @dataclass
 class MediaConfig:
     name: str
-    label: str
+    label: re.Pattern
     types: list[MediaType]
 
 
@@ -169,7 +169,7 @@ class ImportConfig:
         if "media-config" not in self.config:
             return {}
         return {
-            details["label"]: MediaConfig(details["name"], details["label"],
+            details["label"]: MediaConfig(details["name"], re.compile(details["label"]),
                                           [MediaType[str(media_type).upper()]
                                            for media_type in details["types"]])
             for details in self.config["media-config"]
@@ -432,13 +432,13 @@ def get_storages(
 def get_media_list(
         media_config: dict[str, MediaConfig]) -> dict[Path, MediaConfig]:
     logging.debug(media_config)
-    return {
-        Path(device_info["mountpoint"]):
-            media_config[Path(device_info["mountpoint"]).name]
-            for device_info in get_lsblk()
-            if (device_info["mountpoint"] and
-                Path(device_info["mountpoint"]).name in media_config)
-    }
+    media_list = {}
+    for device_info in get_lsblk():
+        for config  in media_config.values():
+            if device_info["mountpoint"] and config.label.match(Path(device_info["mountpoint"]).name):
+                media_list[Path(device_info["mountpoint"])] = config
+                break
+    return media_list
 
 
 def import_action(args: argparse.Namespace) -> int:
@@ -452,7 +452,7 @@ def import_action(args: argparse.Namespace) -> int:
         return 1
     logging.debug(f"Discovered storages: {storages}")
     media_list = ({args.media.absolute(): MediaConfig(
-                    "manual", "manual", list(MediaType))}
+                    "manual", re.compile("manual"), list(MediaType))}
                   if args.media else get_media_list(config.media_config))
     logging.debug(f"Discovered medias: {media_list}")
     if not media_list:

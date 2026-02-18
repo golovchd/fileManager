@@ -17,17 +17,17 @@ storage-config:
       - "Data/Videos/"
 media-config:
   - name: photo-disk
-    label: disk
+    label: ^disk$
     types:
       - photos
       - videos
-  - name: sony-7Rm5
-    label: 546A-BC38
+  - name: sony-7RM5
+    label: "^[0-9A-F]{4}-[0-9A-F]{4}$"
     types:
       - photos
       - videos
   - name: dahscam
-    label: dahscam
+    label: ^dahscam
     types:
       - dashcam
 import-types:
