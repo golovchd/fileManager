@@ -143,11 +143,17 @@ class MediaConfig:
 class ImportConfig:
     def __init__(self, config_file: Path) -> None:
         self.config = load(config_file.read_text("utf-8"), Loader=Loader)
+        logging.debug("ImportConfig: %s", self.config)
 
     @property
     def storage_regex_list(self) -> list[str]:
         return self.config.get("storage-config", {}).get(
                 "storage-includes", ["^not-a-disk$"])
+
+    @property
+    def import_roots_list(self) -> list[str]:
+        logging.debug("import_roots_list: %s", self.config.get("storage-config", {}).get("import-locations", {}).values())
+        return list({import_location["root"] for import_location in self.config.get("storage-config", {}).get("import-locations", {}).values()})
 
     @property
     def free_space_limits(self) -> dict[str, int]:
@@ -182,7 +188,6 @@ class MediaFiles:
         'photo': ['jpg', 'arw', 'png', 'raw'],
         'video': ['mts', 'mp4', 'mov']
     }
-    storage_dirs = ['Data/Photos', 'Data/Videos']
 
     def __init__(self, root: Path, types=None):
         if root.is_dir():
@@ -238,12 +243,12 @@ class MediaFiles:
             self.import_list[str(dir_path)] = dir_list
             self.count += dir_count
 
-    def import_media(self, filter_storage: bool=False) -> int:
+    def import_media(self, storage_dirs: list[str]) -> int:
         """Read dirs under self.root and import files from each dir."""
         if self.count > 0:
             return self.count
 
-        dir_list =  [self.root / dir for dir in MediaFiles.storage_dirs] if filter_storage else [self.root]
+        dir_list =  [self.root / dir for dir in storage_dirs] if storage_dirs else [self.root]
         logging.info(f"Import media {self.root} from {dir_list}")
         for dir_path in dir_list:
             for root, _, files in dir_path.walk():
@@ -341,7 +346,7 @@ class MediaFilesIterator:
 
 
 def get_import_list(
-        media_root: Path, storage_root: Path, filter_storage: bool = True
+        media_root: Path, storage_root: Path, storage_dirs: list[str]
         ) -> tuple[list[Path], dict[str, Path]]:
     """Generating list of files to import.
 
@@ -358,14 +363,14 @@ def get_import_list(
         storage_root tree
     """
     media = MediaFiles(media_root)
-    media.import_media()
+    media.import_media([])
     already_imported_files: dict[str, Path] = {}
     not_imported_files: list[Path] = []
     logging.info(f"{media_root} contain {media.count} files")
     if not media.count:
         return (not_imported_files, already_imported_files)
     storage = MediaFiles(storage_root)
-    storage.import_media(filter_storage)
+    storage.import_media(storage_dirs)
     logging.info(f"{storage_root} contain {storage.count} files")
     count = 0
     present_count = 0
@@ -389,7 +394,7 @@ def get_import_list(
 def print_time(path: Path) -> None:
     """Prints time information of file or all files in dir."""
     media = MediaFiles(path)
-    media.import_media()
+    media.import_media([])
     logging.debug(media)
     for media_file in media:
         file_path = media_file[0] / media_file[1]
@@ -463,7 +468,7 @@ def import_action(args: argparse.Namespace) -> int:
         files_to_import: list[Path] = []
         for media in media_list:
             files_to_import.extend(get_import_list(
-                media, storage, filter_storage=not args.check_entire_storage)[0])
+                media, storage, [] if args.check_entire_storage else config.import_roots_list)[0])
     logging.info(files_to_import)
     return 0
 

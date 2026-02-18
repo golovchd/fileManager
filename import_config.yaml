@@ -5,9 +5,15 @@ storage-config:
     absolute: 50GB
     percentage: 5
   import-locations:
-    photos: "Data/Photos/! To Process/{{ year }}/{{ year }}-{{ month }}-{{ day }}"
-    videos: "Data/Videos/! To Process/{{ year }}/{{ year }}-{{ month }}-{{ day }}"
-    dashcam: "Data/Videos/! Dash Cam {{ number-plate }}/{{ year }}/{{ year }}-{{ month }}-{{ day }}"
+    photos:
+      root: "Data/Photos"
+      target: "! To Process/{{ year }}/{{ year }}-{{ month }}-{{ day }}"
+    videos:
+      root: "Data/Videos"
+      target: "! To Process/{{ year }}/{{ year }}-{{ month }}-{{ day }}"
+    dashcam:
+      root: "Data/Videos"
+      target: "! Dash Cam {{ number-plate }}/{{ year }}/{{ year }}-{{ month }}-{{ day }}"
   skip-locations:
     photos:
       - "Data/Photos/"

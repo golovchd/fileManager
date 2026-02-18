@@ -58,14 +58,11 @@ class ImportMediaTestCase(unittest.TestCase):
             'IMG_0004.JPG': TEST_DATA_DIR / 'storage/tagged/IMG_0004.JPG',
         }
         not_imported, already_imported = import_media.get_import_list(
-            TEST_DATA_DIR / 'media', TEST_DATA_DIR / 'storage',
-            filter_storage=False)
+            TEST_DATA_DIR / 'media', TEST_DATA_DIR / 'storage', [])
         self.assertEqual(sorted(missing_list), sorted(not_imported))
         self.assertEqual(present_dict, already_imported)
         not_imported, already_imported = import_media.get_import_list(
-            TEST_DATA_DIR / 'media',
-            TEST_DATA_DIR / 'storage' / 'tagged',
-            filter_storage=False)
+            TEST_DATA_DIR / 'media', TEST_DATA_DIR / 'storage' / 'tagged', [])
         self.assertEqual(sorted(missing_list), sorted(not_imported))
         self.assertEqual(present_tagged_dict, already_imported)
 
