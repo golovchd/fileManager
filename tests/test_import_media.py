@@ -64,3 +64,10 @@ class ImportMediaTestCase(unittest.TestCase):
             TEST_DATA_DIR / 'media', TEST_DATA_DIR / 'storage' / 'tagged', [])
         self.assertEqual(sorted(missing_list), sorted(not_imported))
         self.assertEqual(present_tagged_dict, already_imported)
+
+    def test_default_config(self):
+        config = import_media.ImportConfig(import_media._DEFAULT_CONFIG)
+        self.assertIsNotNone(config.storage_regex_list)
+        self.assertIsNotNone(config.import_roots_list)
+        self.assertIsNotNone(config.free_space_limits)
+        self.assertIsNotNone(config.media_config)
