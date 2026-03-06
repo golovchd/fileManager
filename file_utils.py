@@ -10,12 +10,11 @@ import sys
 from hashlib import md5
 from pathlib import Path
 from time import CLOCK_MONOTONIC, clock_gettime_ns
-from typing import Any, Dict, List, Tuple
-
+from typing import Any
 
 _IGNORED_DIRS = [".", "..", "$RECYCLE.BIN"]
 
-PARTSIZES_DEFAULTS = [ ## Default Partsizes Map (bytes)
+PARTSIZES_DEFAULTS : list[int] = [ ## Default Partsizes Map (bytes)
   8388608, # aws_cli/boto3
   15728640, # s3cmd
 ]
@@ -38,7 +37,7 @@ def get_mount_path(dir_path: Path) -> Path:
     return dir_path
 
 
-def get_path_from_mount(dir_path: Path) -> List[str]:
+def get_path_from_mount(dir_path: Path) -> list[str]:
     """Returning list dir from mount point to current."""
     relative_from_mount = dir_path.relative_to(get_mount_path(dir_path))
     if relative_from_mount == Path("."):
@@ -46,14 +45,14 @@ def get_path_from_mount(dir_path: Path) -> List[str]:
     return str(relative_from_mount).split("/")
 
 
-def get_disk_info(uuid: str) -> Dict[str, Any]:
+def get_disk_info(uuid: str) -> dict[str, Any]:
     for device_info in get_lsblk():
         if device_info["uuid"] == uuid:
             return device_info
     raise ValueError(f"Failed to locate device for UUID {uuid}")
 
 
-def get_lsblk() -> List[Dict[str, str]]:
+def get_lsblk() -> list[dict[str, str]]:
     uuid_cmd = ["lsblk", "-a", "--output=UUID,LABEL,SIZE,MOUNTPOINT",
                 "--json", "--bytes"]
     lsblk_info = json.loads(subprocess.check_output(uuid_cmd).decode(
@@ -62,7 +61,7 @@ def get_lsblk() -> List[Dict[str, str]]:
     return lsblk_info["blockdevices"]
 
 
-def get_path_disk_info(dir_path: Path) -> Dict[str, Any]:
+def get_path_disk_info(dir_path: Path) -> dict[str, Any]:
     """Getting disk info for given path."""
     mount_path = str(get_mount_path(dir_path))
     for device_info in get_lsblk():
@@ -75,7 +74,7 @@ def get_path_disk_info(dir_path: Path) -> Dict[str, Any]:
     raise ValueError(f"Failed to locate device for path {dir_path}")
 
 
-def read_dir(dir_path: Path) -> Tuple[List[str], List[str]]:
+def read_dir(dir_path: Path) -> tuple[list[str], list[str]]:
     """Reading details of files and subdirs."""
     try:
         files = sorted([file.name for file in dir_path.iterdir()
@@ -91,7 +90,7 @@ def read_dir(dir_path: Path) -> Tuple[List[str], List[str]]:
 
 
 def generate_file_sha1(
-        file_path: Path, blocksize: int = 2**20) -> Tuple[str, int]:
+        file_path: Path, blocksize: int = 2**20) -> tuple[str, int]:
     """Safe way to get SHA1 for big files."""
     sha1_hash = hashlib.sha1()
     start_time = clock_gettime_ns(CLOCK_MONOTONIC)
@@ -120,7 +119,7 @@ def generate_file_sha1(
 
 def read_file(
         file_path: Path, get_sha1: bool
-        ) -> Tuple[str, str, int, float, str, int]:
+        ) -> tuple[str, str, int, float, str, int]:
     """Returns name, type, size, mtime, sha1 of file."""
     file_stat = file_path.stat()
     file_name = file_path.name
@@ -150,13 +149,13 @@ def calc_etag(inputfile: Path, partsize: int) -> str:
   return md5(b''.join(md5_digests)).hexdigest() + '-' + str(len(md5_digests))
 
 
-def factor_of_1MB(filesize: int, num_parts: int):
+def factor_of_1MB(filesize: int, num_parts: int) -> int:
   x = filesize / int(num_parts)
   y = x % 1048576
   return int(x + 1048576 - y)
 
 
-def possible_partsizes(filesize, num_parts):
+def possible_partsizes(filesize: int, num_parts: int):
   return lambda partsize: partsize < filesize and (float(filesize) / float(partsize)) <= num_parts
 
 
@@ -166,7 +165,7 @@ def check_etag(file_path: Path, etag: str) -> bool:
     num_parts = int(etag.split('-')[1])
     partsizes = PARTSIZES_DEFAULTS + [factor_of_1MB(file_size, num_parts)]
     return etag in [calc_etag(file_path, partsize) for partsize in filter(possible_partsizes(file_size, num_parts), partsizes)]
-    
+
 
 def get_possible_etags(file_path: Path) -> list[str]:
     """Returns possible ETags for given file based on its size and default partsizes."""

@@ -196,7 +196,7 @@ def parse_arguments() -> argparse.Namespace:
         "-p", "--path", type=Path, required=True, help="File to check etag for")
     etag_check.add_argument(
         "-e", "--etag", type=str, default="", help="ETag to compare with, if not specified will be calculated from file content")
-    
+
     args = arg_parser.parse_args()
     if args.cmd_name in disk_required and not args.disk:
         arg_parser.error(f"-d DISK argument is required for {args.cmd_name}")
