@@ -1,15 +1,24 @@
 """File utils module."""
 
+from __future__ import annotations
+
 import hashlib
 import json
 import logging
 import subprocess
 import sys
+from hashlib import md5
 from pathlib import Path
 from time import CLOCK_MONOTONIC, clock_gettime_ns
 from typing import Any, Dict, List, Tuple
 
+
 _IGNORED_DIRS = [".", "..", "$RECYCLE.BIN"]
+
+PARTSIZES_DEFAULTS = [ ## Default Partsizes Map (bytes)
+  8388608, # aws_cli/boto3
+  15728640, # s3cmd
+]
 
 
 def get_full_dir_path(path: Path) -> Path:
@@ -131,3 +140,36 @@ def read_file(
 
 def get_confirmation(message: str, accepted_choices: list[str]) -> bool:
     return input(message) in accepted_choices
+
+
+def calc_etag(inputfile: Path, partsize: int) -> str:
+  md5_digests = []
+  with open(inputfile, 'rb') as f:
+    for chunk in iter(lambda: f.read(partsize), b''):
+      md5_digests.append(md5(chunk).digest())
+  return md5(b''.join(md5_digests)).hexdigest() + '-' + str(len(md5_digests))
+
+
+def factor_of_1MB(filesize: int, num_parts: int):
+  x = filesize / int(num_parts)
+  y = x % 1048576
+  return int(x + 1048576 - y)
+
+
+def possible_partsizes(filesize, num_parts):
+  return lambda partsize: partsize < filesize and (float(filesize) / float(partsize)) <= num_parts
+
+
+def check_etag(file_path: Path, etag: str) -> bool:
+    """Checks if ETag of given file matches provided ETag."""
+    file_size = file_path.stat().st_size
+    num_parts = int(etag.split('-')[1])
+    partsizes = PARTSIZES_DEFAULTS + [factor_of_1MB(file_size, num_parts)]
+    return etag in [calc_etag(file_path, partsize) for partsize in filter(possible_partsizes(file_size, num_parts), partsizes)]
+    
+
+def get_possible_etags(file_path: Path) -> list[str]:
+    """Returns possible ETags for given file based on its size and default partsizes."""
+    return [
+        calc_etag(file_path, partsize) for partsize in PARTSIZES_DEFAULTS
+    ]
