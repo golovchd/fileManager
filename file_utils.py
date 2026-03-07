@@ -155,16 +155,12 @@ def factor_of_1MB(filesize: int, num_parts: int) -> int:
   return int(x + 1048576 - y)
 
 
-def possible_partsizes(filesize: int, num_parts: int):
-  return lambda partsize: partsize < filesize and (float(filesize) / float(partsize)) <= num_parts
-
-
 def check_etag(file_path: Path, etag: str) -> bool:
     """Checks if ETag of given file matches provided ETag."""
     file_size = file_path.stat().st_size
     num_parts = int(etag.split('-')[1])
-    partsizes = PARTSIZES_DEFAULTS + [factor_of_1MB(file_size, num_parts)]
-    return etag in [calc_etag(file_path, partsize) for partsize in filter(possible_partsizes(file_size, num_parts), partsizes)]
+    logging.debug(f"check_etag for {file_path} with size {file_size} and etag {etag}.")
+    return etag == calc_etag(file_path, factor_of_1MB(file_size, num_parts))
 
 
 def get_possible_etags(file_path: Path) -> list[str]:
