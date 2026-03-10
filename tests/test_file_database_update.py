@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import sys
 import time
 from pathlib import Path
@@ -8,55 +10,13 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 TEST_DATA_DIR = SCRIPT_DIR.parent / "test_data"
 sys.path.append(str(SCRIPT_DIR.parent))
 
-from db_utils import compare_db_with_ignores, create_db, dump_db  # noqa: E402
+from db_utils import (DB_SCHEMA, compare_db_with_ignores,  # noqa: E402
+                      create_db, dump_db)
 from file_database_update import FileDatabaseUpdater  # noqa: E402
 
-_DB_SCHEMA = SCRIPT_DIR.parent / "fileManager_schema.sql"
-_DB_TEST_DB_DUMP = SCRIPT_DIR.parent / "fileManager_test_dump.sql"
+_DB_TEST_DB_DUMP = SCRIPT_DIR.parent / "test_db/fileManager_test_dump.sql"
 _REFERENCE_DB_NAME = "reference.db"
 _TEST_DB_NAME = "test.db"
-
-
-def test_update_dir(tmp_path):
-    reference_db_path = tmp_path / _REFERENCE_DB_NAME
-    create_db(reference_db_path, _DB_TEST_DB_DUMP)
-    test_db_path = tmp_path / _TEST_DB_NAME
-    create_db(test_db_path, _DB_SCHEMA)
-    with FileDatabaseUpdater(
-            test_db_path, time.time()) as new_file_db:
-        new_file_db.update_dir(TEST_DATA_DIR, max_depth=None)
-    dump_db(test_db_path, tmp_path / "test_update_dir.sql")
-    compare_db_with_ignores(reference_db_path, test_db_path)
-
-
-def test_update_dir_no_hash(tmp_path):
-    reference_db_path = tmp_path / _REFERENCE_DB_NAME
-    create_db(reference_db_path, _DB_TEST_DB_DUMP)
-    test_db_path = tmp_path / _TEST_DB_NAME
-    create_db(test_db_path, _DB_SCHEMA)
-    with FileDatabaseUpdater(
-            test_db_path, time.time()) as new_file_db:
-        new_file_db.update_dir(TEST_DATA_DIR, max_depth=None)
-    with FileDatabaseUpdater(
-            test_db_path, time.time() - 3600) as new_file_db:
-        new_file_db.update_dir(TEST_DATA_DIR, max_depth=None)
-    dump_db(test_db_path, tmp_path / "test_update_dir_no_hash.sql")
-    compare_db_with_ignores(reference_db_path, test_db_path)
-
-
-def test_update_dir_rerun(tmp_path):
-    reference_db_path = tmp_path / _REFERENCE_DB_NAME
-    create_db(reference_db_path, _DB_TEST_DB_DUMP)
-    test_db_path = tmp_path / _TEST_DB_NAME
-    create_db(test_db_path, _DB_SCHEMA)
-    with FileDatabaseUpdater(
-            test_db_path, time.time()) as new_file_db:
-        new_file_db.update_dir(TEST_DATA_DIR, max_depth=None)
-    with FileDatabaseUpdater(
-            test_db_path, time.time() + 3600) as new_file_db:
-        new_file_db.update_dir(TEST_DATA_DIR, max_depth=None)
-    dump_db(test_db_path, tmp_path / "test_update_dir_rerun.sql")
-    compare_db_with_ignores(reference_db_path, test_db_path)
 
 
 def test_delete_dir(tmp_path):

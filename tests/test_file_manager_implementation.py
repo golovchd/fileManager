@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 from typing import Any
@@ -6,13 +8,14 @@ import pytest
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 TEST_DATA_DIR = SCRIPT_DIR.parent / "test_data"
+TEST_DATA_DB_DIR = SCRIPT_DIR.parent / "test_db"
 sys.path.append(str(SCRIPT_DIR.parent))
 
 from db_utils import create_db  # noqa: E402
 from file_manager import FileUtils
 
-_DB_TEST_DB_DUMP = SCRIPT_DIR.parent / "fileManager_test_dump.sql"
-_DB_TEST_DB_1 = SCRIPT_DIR.parent / "fileManager_test_1.sql"
+_DB_TEST_DB_DUMP = TEST_DATA_DB_DIR / "fileManager_test_dump.sql"
+_DB_TEST_DB_1 = TEST_DATA_DB_DIR / "fileManager_test_1.sql"
 _TEST_DB_NAME = "test.db"
 
 
