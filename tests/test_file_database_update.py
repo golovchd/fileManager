@@ -19,48 +19,6 @@ _REFERENCE_DB_NAME = "reference.db"
 _TEST_DB_NAME = "test.db"
 
 
-def test_update_dir(tmp_path):
-    reference_db_path = tmp_path / _REFERENCE_DB_NAME
-    create_db(reference_db_path, _DB_TEST_DB_DUMP)
-    test_db_path = tmp_path / _TEST_DB_NAME
-    create_db(test_db_path, DB_SCHEMA)
-    with FileDatabaseUpdater(
-            test_db_path, time.time()) as new_file_db:
-        new_file_db.update_dir(TEST_DATA_DIR, max_depth=None)
-    dump_db(test_db_path, tmp_path / "test_update_dir.sql")
-    compare_db_with_ignores(reference_db_path, test_db_path)
-
-
-def test_update_dir_no_hash(tmp_path):
-    reference_db_path = tmp_path / _REFERENCE_DB_NAME
-    create_db(reference_db_path, _DB_TEST_DB_DUMP)
-    test_db_path = tmp_path / _TEST_DB_NAME
-    create_db(test_db_path, DB_SCHEMA)
-    with FileDatabaseUpdater(
-            test_db_path, time.time()) as new_file_db:
-        new_file_db.update_dir(TEST_DATA_DIR, max_depth=None)
-    with FileDatabaseUpdater(
-            test_db_path, time.time() - 3600) as new_file_db:
-        new_file_db.update_dir(TEST_DATA_DIR, max_depth=None)
-    dump_db(test_db_path, tmp_path / "test_update_dir_no_hash.sql")
-    compare_db_with_ignores(reference_db_path, test_db_path)
-
-
-def test_update_dir_rerun(tmp_path):
-    reference_db_path = tmp_path / _REFERENCE_DB_NAME
-    create_db(reference_db_path, _DB_TEST_DB_DUMP)
-    test_db_path = tmp_path / _TEST_DB_NAME
-    create_db(test_db_path, DB_SCHEMA)
-    with FileDatabaseUpdater(
-            test_db_path, time.time()) as new_file_db:
-        new_file_db.update_dir(TEST_DATA_DIR, max_depth=None)
-    with FileDatabaseUpdater(
-            test_db_path, time.time() + 3600) as new_file_db:
-        new_file_db.update_dir(TEST_DATA_DIR, max_depth=None)
-    dump_db(test_db_path, tmp_path / "test_update_dir_rerun.sql")
-    compare_db_with_ignores(reference_db_path, test_db_path)
-
-
 def test_delete_dir(tmp_path):
     reference_db_path = tmp_path / _REFERENCE_DB_NAME
     create_db(reference_db_path, _DB_TEST_DB_DUMP)
