@@ -10,11 +10,10 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 TEST_DATA_DIR = SCRIPT_DIR.parent / "test_data"
 sys.path.append(str(SCRIPT_DIR.parent))
 
-from db_utils import (DB_SCHEMA, compare_db_with_ignores,  # noqa: E402
-                      create_db, dump_db)
+from db_utils import create_db, dump_db  # noqa: E402
 from file_database_update import FileDatabaseUpdater  # noqa: E402
 
-_DB_TEST_DB_DUMP = SCRIPT_DIR.parent / "test_db/fileManager_test_dump.sql"
+_DB_TEST_DB_DUMP = [SCRIPT_DIR.parent / "test_db/fileManager_test_dump.sql"]
 _REFERENCE_DB_NAME = "reference.db"
 _TEST_DB_NAME = "test.db"
 
