@@ -1,20 +1,21 @@
+from __future__ import annotations
+
 import sqlite3
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import pytest
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-TEST_DATA_DIR = SCRIPT_DIR.parent / "test_data"
+TEST_DATA_DB_DIR = SCRIPT_DIR.parent / "test_db"
 sys.path.append(str(SCRIPT_DIR.parent))
 
 from db_utils import TABLE_SELECT, create_db  # noqa: E402
 from file_database import FileManagerDatabase  # noqa: E402
 
-_DB_TEST_DB_DUMP = SCRIPT_DIR.parent / "fileManager_test_dump.sql"
-_DB_TEST_DB_1 = SCRIPT_DIR.parent / "fileManager_test_1.sql"
+_DB_TEST_DB_DUMP = TEST_DATA_DB_DIR / "fileManager_test_dump.sql"
+_DB_TEST_DB_1 = TEST_DATA_DB_DIR / "fileManager_test_1.sql"
 _TEST_DB_NAME = "test.db"
 
 
@@ -25,7 +26,7 @@ def test_error_exec_sql(tmp_path: Path) -> None:
 
 
 def test_set_disk_change(tmp_path: Path, mocker) -> None:
-    def mock_exec_query(self, sql: str, params: Tuple, commit=True):
+    def mock_exec_query(self, sql: str, params: tuple, commit=True):
         yield [5, "abc", 500, "test-label"]
 
     mocker.patch(
@@ -112,7 +113,7 @@ def test_set_disk_change(tmp_path: Path, mocker) -> None:
 )
 def test_get_path(
         tmp_path: Path, fsrecord_id: int, fsrecord_path: str,
-        dir_cache: Dict[int, str], id_cache: Dict[str, int]) -> None:
+        dir_cache: dict[int, str], id_cache: dict[str, int]) -> None:
     reference_db_path = tmp_path / _TEST_DB_NAME
     create_db(reference_db_path, _DB_TEST_DB_DUMP)
     with FileManagerDatabase(reference_db_path, time.time()) as db:
@@ -131,7 +132,7 @@ def test_get_path(
     ]
 )
 def test_query_subdirs(
-        tmp_path: Path, dir: int, recursive: bool, subdirs: List[int]) -> None:
+        tmp_path: Path, dir: int, recursive: bool, subdirs: list[int]) -> None:
     reference_db_path = tmp_path / _TEST_DB_NAME
     create_db(reference_db_path, _DB_TEST_DB_DUMP)
     with FileManagerDatabase(reference_db_path, time.time()) as db:
@@ -151,7 +152,7 @@ def test_query_subdirs(
         ([], ["0a2e2cb7-4543-43b3-a04a-40959889bd45"], None, {})
     ]
 )
-def test_get_file_path_on_disk(tmp_path: Path, file_id: List[str], disks: List[str], parent_root_path: Optional[str], expected_result: Dict[str, List[str]]) -> None:
+def test_get_file_path_on_disk(tmp_path: Path, file_id: list[str], disks: list[str], parent_root_path: str | None, expected_result: dict[str, list[str]]) -> None:
     reference_db_path = tmp_path / _TEST_DB_NAME
     create_db(reference_db_path, _DB_TEST_DB_DUMP)
     with FileManagerDatabase(reference_db_path, time.time()) as db:

@@ -4,6 +4,10 @@ from pathlib import Path
 from time import sleep
 from typing import Dict, List, Sequence
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+DB_SCHEMA_DIR = SCRIPT_DIR / "db_schema"
+DB_SCHEMA = DB_SCHEMA_DIR / "fileManager_schema.sql"
+
 TABLE_SELECT = "SELECT `ROWID`, `{}`.* FROM `{}` ORDER BY `ROWID`"
 # Tables and indexes to ignore
 TABLE_COMPARE: Dict[str, List[int]] = {
@@ -52,10 +56,19 @@ def compare_db_with_ignores(db1_path: Path, dg2_path: Path) -> None:
     connection_2.close()
 
 
+def initialize_database(db_path: Path):
+    """Initialize database."""
+    if db_path.exists():
+        return
+    logging.info(f"Creating database at {db_path}")
+    create_db(db_path, DB_SCHEMA)
+
+
 class SQLite3connection:
     """Basic sqlite3 coonection functionality."""
 
     def __init__(self, db_path: Path):
+        initialize_database(db_path)
         self._con = sqlite3.connect(db_path, timeout=10)
         self.SQLITE_LIMIT_VARIABLE_NUMBER = max(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, 32766) if hasattr(sqlite3, 'SQLITE_LIMIT_VARIABLE_NUMBER') else 32766
         logging.info(f"Using DB {db_path}")
