@@ -8,7 +8,9 @@ from typing import Sequence
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DB_SCHEMA_DIR = SCRIPT_DIR / "db_schema"
-DB_SCHEMA = DB_SCHEMA_DIR / "fileManager_schema.sql"
+DB_SCHEMA = [
+    DB_SCHEMA_DIR / "fileManager_schema.sql",
+]
 
 TABLE_SELECT = "SELECT `ROWID`, `{}`.* FROM `{}` ORDER BY `ROWID`"
 # Tables and indexes to ignore
@@ -24,9 +26,10 @@ _RETRY_FIRST_DELAY = 1
 _RETRY_DELAY_EXP = 1.5
 
 
-def create_db(db_path: Path, db_dump: Path) -> None:
+def create_db(db_path: Path, db_dumps: list[Path]) -> None:
     connection = sqlite3.connect(db_path)
-    connection.executescript(db_dump.read_text())
+    for db_dump in db_dumps:
+        connection.executescript(db_dump.read_text())
     connection.close()
 
 

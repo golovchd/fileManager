@@ -11,7 +11,7 @@ sys.path.append(str(SCRIPT_DIR.parent))
 from db_utils import (SQLite3connection, compare_db_with_ignores, create_db,
                       dump_db)
 
-_DB_TEST_DB_DUMP = SCRIPT_DIR.parent / "test_db/fileManager_test_dump.sql"
+_DB_TEST_DB_DUMP = [SCRIPT_DIR.parent / "test_db/fileManager_test_dump.sql"]
 _TEST_DB_NAME = "test.db"
 
 

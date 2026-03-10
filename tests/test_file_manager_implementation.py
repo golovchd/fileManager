@@ -14,8 +14,8 @@ sys.path.append(str(SCRIPT_DIR.parent))
 from db_utils import create_db  # noqa: E402
 from file_manager import FileUtils
 
-_DB_TEST_DB_DUMP = TEST_DATA_DB_DIR / "fileManager_test_dump.sql"
-_DB_TEST_DB_1 = TEST_DATA_DB_DIR / "fileManager_test_1.sql"
+_DB_TEST_DB_DUMP = [TEST_DATA_DB_DIR / "fileManager_test_dump.sql"]
+_DB_TEST_DB_1 = [TEST_DATA_DB_DIR / "fileManager_test_1.sql"]
 _TEST_DB_NAME = "test.db"
 
 
