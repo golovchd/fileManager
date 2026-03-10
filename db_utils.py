@@ -61,6 +61,9 @@ def initialize_database(db_path: Path):
     if db_path.exists():
         return
     logging.info(f"Creating database at {db_path}")
+    if not db_path.parent.exists():
+        logging.info(f"Creating parent directory for database at {db_path.parent}")
+        db_path.parent.mkdir(parents=True, exist_ok=True)
     create_db(db_path, DB_SCHEMA)
 
 
