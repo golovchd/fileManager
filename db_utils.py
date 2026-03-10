@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import logging
 import sqlite3
 from pathlib import Path
 from time import sleep
-from typing import Dict, List, Sequence
+from typing import Sequence
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DB_SCHEMA_DIR = SCRIPT_DIR / "db_schema"
@@ -10,7 +12,7 @@ DB_SCHEMA = DB_SCHEMA_DIR / "fileManager_schema.sql"
 
 TABLE_SELECT = "SELECT `ROWID`, `{}`.* FROM `{}` ORDER BY `ROWID`"
 # Tables and indexes to ignore
-TABLE_COMPARE: Dict[str, List[int]] = {
+TABLE_COMPARE: dict[str, list[int]] = {
     "types": [],
     "files": [3],
     "disks": [1, 2],
