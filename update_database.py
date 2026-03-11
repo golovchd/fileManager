@@ -9,6 +9,7 @@ from pathlib import Path
 
 from file_database import DEFAULT_DATABASE
 from file_database_update import FileDatabaseUpdater
+from storage_interface import get_storage_client
 
 REHASH_INTERVAL = 180  # Number of days before re-hash file if not changed
 
@@ -17,7 +18,7 @@ def main(argv):
     """Module as util use wrapper."""
     arg_parser = argparse.ArgumentParser(
         description="Load files to database")
-    arg_parser.add_argument("--media", type=Path,
+    arg_parser.add_argument("--media", type=str,
                             help="Media to import files from",
                             default=None)
     arg_parser.add_argument(
@@ -51,7 +52,7 @@ def main(argv):
     rehash_time = time.time() - args.rehash_interval * 24 * 3600
     with FileDatabaseUpdater(
           args.database, rehash_time) as file_db:
-        file_db.update_dir(args.media, max_depth=args.max_depth)
+        file_db.update_dir(get_storage_client(args.media), max_depth=args.max_depth)
         file_db.handle_orfans(clear_orfan_files=args.clear_orfan_files)
 
 

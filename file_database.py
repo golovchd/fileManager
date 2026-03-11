@@ -6,7 +6,6 @@ import logging
 import re
 from pathlib import Path
 from time import time
-from typing import Dict, List, Optional, Tuple
 
 import file_utils
 from db_utils import SQLite3connection
@@ -93,15 +92,15 @@ class FileManagerDatabase(SQLite3connection):
         self._rehash_time = rehash_time
         # Details on current disk
         self._disk_id: int = 0
-        self._disk_uuid: Optional[str] = None
-        self._disk_size: Optional[int] = None
-        self._disk_label: Optional[str] = None
+        self._disk_uuid: str | None = None
+        self._disk_size: int | None = None
+        self._disk_label: str | None = None
         # Ref to top dir on disk of the current dir
         self._top_dir_id: int = 0
-        self._id_cache: Dict[int, Dict[str, int]] = {}
-        self._path_cache: Dict[int, str] = {}
+        self._id_cache: dict[int, dict[str, int]] = {}
+        self._path_cache: dict[int, str] = {}
         self._cur_dir_id: int = 0
-        self._cur_dir_path: Path = Path(".")
+        self._cur_dir_path: str = "."
         self.mountpoint: Path = Path(".")
 
     def _set_disk(self, id: int, uuid: str, size: int, label: str) -> None:
@@ -164,7 +163,7 @@ class FileManagerDatabase(SQLite3connection):
                 tuple(orfans_list), commit=True)
         return orfans_count
 
-    def _query_disks(self, names: List[str]) -> List[List[str]]:
+    def _query_disks(self, names: list[str]) -> list[list[str]]:
         return  self._exec_query(_DISK_SELECT.format(",?" * (len(names) - 1), ",?" * (len(names) - 1)), (*names, *names), commit=False)
 
     def set_disk(self, uuid: str, size: int, label: str) -> None:
@@ -240,7 +239,7 @@ class FileManagerDatabase(SQLite3connection):
         return self.get_fsrecord_id(fsrecord_name, parent_id, is_file=is_file)
 
     def get_dir_id(
-            self, from_mount_path: List[str], insert_dirs: bool = True) -> int:
+            self, from_mount_path: list[str], insert_dirs: bool = True) -> int:
         """Returns id of the dir from a path."""
         if not from_mount_path:
             return self._top_dir_id
@@ -290,7 +289,7 @@ class FileManagerDatabase(SQLite3connection):
         self._save_path_cache(fsrecord_id, fsrecord_path, disk_id=disk_id)
         return fsrecord_path
 
-    def query_files_on_disk(self, disk_id: int, file_id: List[str]) -> list[str]:
+    def query_files_on_disk(self, disk_id: int, file_id: list[str]) -> list[str]:
         result = []
         shards_count = 1 + (len(file_id) + 1) // self.SQLITE_LIMIT_VARIABLE_NUMBER
         shard_size = len(file_id) // shards_count
@@ -301,18 +300,18 @@ class FileManagerDatabase(SQLite3connection):
             logging.debug(f"query_files_on_disk: got {len(result)} records after shard {i}")
         return result
 
-    def get_file_path_on_disk(self, file_id: List[str], disks: List[str], parent_root_path: Optional[str]= None, exclude_path: Optional[list[str]]= None) -> Dict[str, List[str]]:
+    def get_file_path_on_disk(self, file_id: list[str], disks: list[str], parent_root_path: str | None= None, exclude_path: list[str] | None= None) -> dict[str, list[str]]:
         """Return path on disk of specific file_id."""
         if not file_id:
             return {}
         disk_labels = {row[0]: row[3] for row in self._query_disks(disks)}
-        path_on_disk: Dict[str, List[str]] = {disk_label: [] for disk_label in disk_labels.values()}
+        path_on_disk: dict[str, list[str]] = {disk_label: [] for disk_label in disk_labels.values()}
         for disk_id, disk_label in disk_labels.items():
             all_path_on_disk = self.query_files_on_disk(int(disk_id), file_id)
             path_on_disk[disk_label].extend([path for path in all_path_on_disk if (not parent_root_path or path.startswith(f"{parent_root_path}/")) and not any(re.match(exclude_pattern, path) for exclude_pattern in exclude_path or [])])
         return path_on_disk
 
-    def query_subdirs(self, dir: int, recursively: bool = False) -> List[int]:
+    def query_subdirs(self, dir: int, recursively: bool = False) -> list[int]:
         """Queries files of given pair of dirs."""
         subdirs = []
         parents = [dir]
@@ -329,26 +328,21 @@ class FileManagerDatabase(SQLite3connection):
             parents = next_parents
         return subdirs
 
-    def set_cur_dir(self, dir_path: Path):
-        """Saving/updating dir with a path to disk root."""
-        if not self._top_dir_id:
-            raise ValueError("Missing _top_dir_id")
-        self._cur_dir_id = self.get_dir_id(
-            file_utils.get_path_from_mount(dir_path))
-        self._cur_dir_path = dir_path
-        logging.debug(f"set_cur_dir: {self._cur_dir_path}={self._cur_dir_id}")
-
     def clean_cur_dir(self, names, is_files):
         """Deleting from DB files/subdirs missing in names list."""
         if not self._cur_dir_id:
             raise ValueError("Missing _cur_dir_id")
-        clean_sql = _DIR_CLEAN.format("NOT" if is_files else "")
-        if names:
-            clean_sql += _DIR_CLEAN_NAMES + ", ?" * (len(names) - 1) + ")"
-        self._exec_query(
-            clean_sql, tuple([self._disk_id, self._cur_dir_id] + names))
+        logging.debug(f"clean_cur_dir: {self._cur_dir_id}, len(names): {len(names)}, is_files={is_files}")
+        if len(names) < self.SQLITE_LIMIT_VARIABLE_NUMBER - 2:
+            clean_sql = _DIR_CLEAN.format("NOT" if is_files else "")
+            if names:
+                clean_sql += _DIR_CLEAN_NAMES + ", ?" * (len(names) - 1) + ")"
+            self._exec_query(
+                clean_sql, tuple([self._disk_id, self._cur_dir_id] + names))
+        else:
+            logging.warning(f"clean_cur_dir: too many names {len(names)}, skipping clean missing {'files' if is_files else 'dirs'} for dir_id {self._cur_dir_id}")
 
-    def get_db_file_info(self, file_name: str) -> Tuple[
+    def get_db_file_info(self, file_name: str) -> tuple[
             int, float, float, int, int, str]:
         """Query if exists fsrecords/files details on file.
             Returned fields:

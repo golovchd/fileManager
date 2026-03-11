@@ -1,18 +1,18 @@
 """File database update module."""
 
 import logging
-from pathlib import Path
 from time import CLOCK_MONOTONIC, clock_gettime_ns
 from typing import List, Optional, Tuple
 
 import file_utils
 from file_database import FileManagerDatabase
+from storage_client import StorageClient
 
 _MAX_ORFAN_SEARCH_DEPTH = 256
 
 
 class FileDatabaseUpdater(FileManagerDatabase):
-    def update_file(self, file_full_name: str) -> Tuple[int, int, int]:
+    def update_file(self, file_full_name: str, storage_client: StorageClient) -> Tuple[int, int, int]:
         """Updates or inserts in DB details on file.
             Returns hashed size, file size, hash time in ns."""
         if not self._cur_dir_id:
@@ -21,15 +21,12 @@ class FileDatabaseUpdater(FileManagerDatabase):
             fsrecord_id, sha1_read_date, db_file_mtime, file_id, db_file_size,
             db_file_sha1
         ) = self.get_db_file_info(file_full_name)
-        file_path = self._cur_dir_path / file_full_name
-        file_name, file_type, size, mtime, _, _ = file_utils.read_file(
-                file_path, False)
+        file_name, file_type, size, mtime, _, _ = storage_client.read_file_info(file_full_name, False)
         if (self._rehash_time < sha1_read_date and
                 db_file_size == size and db_file_mtime == mtime):
             return 0, size, 0   # Current file details matching DB, no re-hash
 
-        file_name, file_type, size, mtime, sha1, hash_time = (
-            file_utils.read_file(file_path, True))
+        file_name, file_type, size, mtime, sha1, hash_time = storage_client.read_file_info(file_full_name, True)
         if not sha1:
             if fsrecord_id:
                 logging.warning(f"Failed to get SHA1 for {file_full_name}, "
@@ -37,7 +34,7 @@ class FileDatabaseUpdater(FileManagerDatabase):
                                 f"of fsrecord_id={fsrecord_id}")
             return 0, size, 0   # Skip file if unable to read
 
-        logging.debug(f"Update fsrecord {fsrecord_id} from {file_path}, "
+        logging.debug(f"Update fsrecord {fsrecord_id} from {storage_client.media}/{file_full_name}, "
                       f"SHA1={sha1}, {size} B, {file_name} {file_type}")
         new_file_id = self.select_update_file_record(
             sha1, mtime, size, file_name, file_type
@@ -47,25 +44,25 @@ class FileDatabaseUpdater(FileManagerDatabase):
         del file_id
         return size, size, hash_time
 
-    def update_files(self, files: List[str]) -> Tuple[int, int, int]:
+    def update_files(self, files: List[str], storage_client: StorageClient) -> Tuple[int, int, int]:
         """Updating files in current dir.
             Returns hashed size, file size, hash time in ns."""
         hashed_size = 0
         total_size = 0
         total_hash_time = 0
         for file_name in files:
-            if (self._cur_dir_path / file_name).is_symlink():
-                logging.warning("update_files called for symlink %s",
-                                self._cur_dir_path / file_name)
+            if storage_client.is_symlink(file_name):
+                logging.warning("update_files called for symlink %s/%s",
+                                self._cur_dir_path, file_name)
                 continue
-            hashsed, size, hash_time = self.update_file(file_name)
+            hashsed, size, hash_time = self.update_file(file_name, storage_client)
             hashed_size += hashsed
             total_size += size
             total_hash_time += hash_time
         return hashed_size, total_size, total_hash_time
 
     def print_statistic(
-                self, path: Path, start_time_ns: int,
+                self, path: str, start_time_ns: int,
                 files_count: int, files_hashed_size: int,
                 files_total_size: int, files_hash_time_ns: int,
             ) -> None:
@@ -89,42 +86,52 @@ class FileDatabaseUpdater(FileManagerDatabase):
                      f"{files_hash_time_ns / 1E9:.2f} sec, "
                      f"{average_hash_time:.2f} MB/sec.")
 
+    def set_cur_dir(self, storage_client: StorageClient) -> None:
+        """Saving/updating dir with a path to disk root."""
+        if not self._top_dir_id:
+            raise ValueError("Missing _top_dir_id")
+        self._cur_dir_id = self.get_dir_id(storage_client.get_path_from_mount())
+        self._cur_dir_path = storage_client.media
+        logging.debug(f"set_cur_dir: {self._cur_dir_path}={self._cur_dir_id}")
+
     def update_dir(
-            self, path: Path,
+            self, storage_client: StorageClient,
             max_depth: Optional[int] = 0, check_disk: bool = True
             ) -> Tuple[int, int, int, int]:
         """Updating DB with dir details, entrypoint for update_database."""
-        dir_path = file_utils.get_full_dir_path(path)
+        dir_path = storage_client.media
         start_time = clock_gettime_ns(CLOCK_MONOTONIC)
-        logging.debug(f"update_dir for: {path}, full path: {dir_path}")
+        logging.debug(f"update_dir for: {dir_path} with max_depth {max_depth}")
         if check_disk:
-            self.set_disk(**file_utils.get_path_disk_info(dir_path))
-        self.set_cur_dir(dir_path)
-        files, sub_dirs = file_utils.read_dir(dir_path)
+            self.set_disk(**storage_client.get_disk_info())
+        self.set_cur_dir(storage_client)
+        files, sub_dirs = storage_client.read_dir()
         files_count = len(files)
         logging.info("update_dir: %s, %d files, %d sub dirs",
                      dir_path, len(files), len(sub_dirs))
         self.clean_cur_dir(files, is_files=True)
         self.clean_cur_dir(sub_dirs, is_files=False)
         files_hashed_size, files_total_size, files_hash_time_ns = (
-            self.update_files(files))
+            self.update_files(files, storage_client))
+
 
         if max_depth != 0:
             for sub_dir_name in sub_dirs:
-                if (path / sub_dir_name).is_symlink():
-                    logging.warning("update_dir called for symlink %s",
-                                    self._cur_dir_path / sub_dir_name)
+                storage_client.set_media(dir_path  + '/' + sub_dir_name)
+                if storage_client.is_symlink():
+                    logging.warning("update_dir called for symlink %s/%s",
+                                    dir_path, sub_dir_name)
                     continue
                 dir_files_count, dir_hashed_size, dir_size, hash_time_ns = (
                     self.update_dir(
-                        path / sub_dir_name,
+                        storage_client,
                         max_depth=max_depth - 1 if max_depth else None,
                         check_disk=False))
                 files_count += dir_files_count
                 files_hashed_size += dir_hashed_size
                 files_total_size += dir_size
                 files_hash_time_ns += hash_time_ns
-        self.print_statistic(path, start_time, files_count, files_hashed_size,
+        self.print_statistic(dir_path, start_time, files_count, files_hashed_size,
                              files_total_size, files_hash_time_ns)
         return (
             files_count, files_hashed_size,
