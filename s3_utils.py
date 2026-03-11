@@ -20,7 +20,7 @@ class S3Client(StorageClient):
     def set_media(self, media: str):
         if media.startswith("s3://"):
             media = media[5:]
-        path_parts = media.split("/", 1)
+        path_parts = media.rstrip("/").split("/", 1)
         self._bucket = path_parts[0]
         self._prefix = path_parts[1] if len(path_parts) > 1 else ""
         self._media = self._bucket
