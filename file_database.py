@@ -374,7 +374,8 @@ class FileManagerDatabase(SQLite3connection):
         if not sha1:
             raise ValueError(f"Empty SHA1 for file {file_name}")
         if not file_name:
-            raise ValueError(f"Empty file_name for file with SHA1 {sha1}")
+            file_name = ""
+            logging.warning(f"Empty file_name for file with SHA1 {sha1}")
         file_id = self.select_file_id(sha1, mtime)
         if file_id:
             return file_id

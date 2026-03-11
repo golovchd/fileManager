@@ -101,7 +101,7 @@ class FileDatabaseUpdater(FileManagerDatabase):
         """Updating DB with dir details, entrypoint for update_database."""
         dir_path = storage_client.media
         start_time = clock_gettime_ns(CLOCK_MONOTONIC)
-        logging.debug(f"update_dir for: {dir_path} with max_depth {max_depth}")
+        logging.debug(f"update_dir for {dir_path}")
         if check_disk:
             self.set_disk(**storage_client.get_disk_info())
         self.set_cur_dir(storage_client)

@@ -10,7 +10,6 @@ from storage_client import StorageClient
 
 class S3Client(StorageClient):
     def __init__(self, media: str) -> None:
-        super().__init__(media.rstrip("/"))
         self.set_media(media)
         self._client = client("s3")
 
@@ -19,9 +18,14 @@ class S3Client(StorageClient):
         return False
 
     def set_media(self, media: str):
-        path_parts = media[5:].split("/", 1)
+        if media.startswith("s3://"):
+            media = media[5:]
+        path_parts = media.split("/", 1)
         self._bucket = path_parts[0]
         self._prefix = path_parts[1] if len(path_parts) > 1 else ""
+        self._media = self._bucket
+        if self._prefix:
+            self._media += "/" + self._prefix
 
     def get_disk_info(self) -> dict[str, Any]:
         return {"uuid": self._bucket, "size": 1, "label": self._bucket}
@@ -43,7 +47,6 @@ class S3Client(StorageClient):
             for dir in page.get("CommonPrefixes", []):
                 dirs.append(dir["Prefix"].split("/")[-2])
             for obj in page.get("Contents", []):
-                logging.info(f"page[{page_count}] got {obj}")
                 path_parts = obj["Key"].split("/")
                 files.append(path_parts[-1])
             page_count += 1
