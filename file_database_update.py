@@ -88,7 +88,7 @@ class FileDatabaseUpdater(FileManagerDatabase):
         """Calculates and prints dir processing statistic."""
         process_time_ns = clock_gettime_ns(CLOCK_MONOTONIC) - start_time_ns
         average_process_speed = (files_total_size * 1E3) / process_time_ns
-        file_process_speed = (files_count * 1E3) / process_time_ns
+        file_process_speed = (files_count * 1E9) / process_time_ns
         if files_hash_time_ns:
             average_hash_time = (files_hashed_size * 1E3) / files_hash_time_ns
         else:
