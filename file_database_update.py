@@ -1,25 +1,25 @@
 """File database update module."""
+from __future__ import annotations
 
 import logging
+from sqlite3 import IntegrityError
 from time import CLOCK_MONOTONIC, clock_gettime_ns
-from typing import List, Optional, Tuple
 
-import file_utils
 from file_database import FileManagerDatabase
 from storage_client import StorageClient
 
 _MAX_ORFAN_SEARCH_DEPTH = 256
+_FILE_INSERT_RETRY_COUNT = 2
 
 
 class FileDatabaseUpdater(FileManagerDatabase):
-    def update_file(self, file_full_name: str, storage_client: StorageClient) -> Tuple[int, int, int]:
+    def update_file(self, file_full_name: str, storage_client: StorageClient) -> tuple[int, int, int]:
         """Updates or inserts in DB details on file.
             Returns hashed size, file size, hash time in ns."""
         if not self._cur_dir_id:
             raise ValueError("Missing _cur_dir_id")
         (
-            fsrecord_id, sha1_read_date, db_file_mtime, file_id, db_file_size,
-            db_file_sha1
+            fsrecord_id, sha1_read_date, db_file_mtime, file_id, db_file_size, db_file_sha1
         ) = self.get_db_file_info(file_full_name)
 
         if storage_client.slow_file_read:
@@ -47,15 +47,23 @@ class FileDatabaseUpdater(FileManagerDatabase):
 
         logging.debug(f"Update fsrecord {fsrecord_id} from {storage_client.media}/{file_full_name}, "
                       f"SHA1={sha1}, {size} B, {file_name} {file_type}")
-        new_file_id = self.select_update_file_record(
-            sha1, mtime, size, file_name, file_type
-        )
-        self.update_fsrecord(fsrecord_id, file_full_name, mtime, new_file_id)
-        # TODO: Handle deletion of old `files` record file_id
-        del file_id
+        for attempt in range(_FILE_INSERT_RETRY_COUNT):
+            try:
+                new_file_id = self.select_update_file_record(
+                    sha1, mtime, size, file_name, file_type
+                )
+                self.update_fsrecord(fsrecord_id, file_full_name, mtime, new_file_id)
+                # TODO: Handle deletion of old `files` record file_id
+                del file_id
+                return size, size, hash_time
+            except IntegrityError as error:
+                logging.warning(f"update_file: Attempt {attempt + 1} failed to insert file record for {storage_client.media}/{file_full_name}, due to {error}, retrying...")
+                continue
+
+        logging.error(f"update_file: Failed to insert file record for {storage_client.media}/{file_full_name} after {_FILE_INSERT_RETRY_COUNT} attempts, ")
         return size, size, hash_time
 
-    def update_files(self, files: List[str], storage_client: StorageClient) -> Tuple[int, int, int]:
+    def update_files(self, files: list[str], storage_client: StorageClient) -> tuple[int, int, int]:
         """Updating files in current dir.
             Returns hashed size, file size, hash time in ns."""
         hashed_size = 0
@@ -80,6 +88,7 @@ class FileDatabaseUpdater(FileManagerDatabase):
         """Calculates and prints dir processing statistic."""
         process_time_ns = clock_gettime_ns(CLOCK_MONOTONIC) - start_time_ns
         average_process_speed = (files_total_size * 1E3) / process_time_ns
+        file_process_speed = (files_count * 1E9) / process_time_ns
         if files_hash_time_ns:
             average_hash_time = (files_hashed_size * 1E3) / files_hash_time_ns
         else:
@@ -88,7 +97,7 @@ class FileDatabaseUpdater(FileManagerDatabase):
                             if files_total_size else 0)
         hashing_time_pct = 100 * files_hash_time_ns / process_time_ns
         logging.info(f"Processed {path} in {process_time_ns / 1E9:.2f} sec, "
-                     f"{files_count} files, "
+                     f"{files_count} files, {file_process_speed:.2f} files/sec, "
                      f"total size {files_total_size / 1E6:.2f} MB, "
                      f"{average_process_speed:.2f} MB/sec.")
         logging.info(f"In {path} hashed {hashing_size_pct:.1f}% by size, "
@@ -107,8 +116,8 @@ class FileDatabaseUpdater(FileManagerDatabase):
 
     def update_dir(
             self, storage_client: StorageClient,
-            max_depth: Optional[int] = 0, check_disk: bool = True
-            ) -> Tuple[int, int, int, int]:
+            max_depth: int | None = 0, check_disk: bool = True
+            ) -> tuple[int, int, int, int]:
         """Updating DB with dir details, entrypoint for update_database."""
         dir_path = storage_client.media
         start_time = clock_gettime_ns(CLOCK_MONOTONIC)
