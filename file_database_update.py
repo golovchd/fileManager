@@ -22,6 +22,10 @@ class FileDatabaseUpdater(FileManagerDatabase):
             db_file_sha1
         ) = self.get_db_file_info(file_full_name)
         file_name, file_type, size, mtime, _, _ = storage_client.read_file_info(file_full_name, False)
+        if size == 0 or file_name == "" and file_type == "":
+            logging.warning(f"update_file: size {size} for {storage_client.media}/{file_full_name}, " +
+                            (f"skipping update of fsrecord_id={fsrecord_id}" if fsrecord_id else f"skipping insertion into DB"))
+            return 0, size, 0
         if (self._rehash_time < sha1_read_date and
                 db_file_size == size and db_file_mtime == mtime):
             return 0, size, 0   # Current file details matching DB, no re-hash
