@@ -46,7 +46,7 @@ class FileDatabaseUpdater(FileManagerDatabase):
             return 0, size, 0   # Skip file if unable to read
 
         logging.debug(f"Update fsrecord {fsrecord_id} from {storage_client.media}/{file_full_name}, "
-                    f"SHA1={sha1}, {size} B, {file_name} {file_type}")
+                      f"SHA1={sha1}, {size} B, {file_name} {file_type}")
         for attempt in range(_FILE_INSERT_RETRY_COUNT):
             try:
                 new_file_id = self.select_update_file_record(
@@ -62,7 +62,6 @@ class FileDatabaseUpdater(FileManagerDatabase):
 
         logging.error(f"update_file: Failed to insert file record for {storage_client.media}/{file_full_name} after {_FILE_INSERT_RETRY_COUNT} attempts, ")
         return size, size, hash_time
-
 
     def update_files(self, files: list[str], storage_client: StorageClient) -> tuple[int, int, int]:
         """Updating files in current dir.
