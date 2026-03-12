@@ -51,8 +51,8 @@ def main(argv):
 
     rehash_time = time.time() - args.rehash_interval * 24 * 3600
     with FileDatabaseUpdater(
-          args.database, rehash_time) as file_db:
-        file_db.update_dir(get_storage_client(args.media), max_depth=args.max_depth)
+          args.database, rehash_time, get_storage_client(args.media)) as file_db:
+        file_db.update_dir(max_depth=args.max_depth)
         file_db.handle_orfans(clear_orfan_files=args.clear_orfan_files)
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
+from sqlite3 import Connection
 from time import time
 
 import file_utils
@@ -342,7 +343,7 @@ class FileManagerDatabase(SQLite3connection):
         else:
             logging.warning(f"clean_cur_dir: too many names {len(names)}, skipping clean missing {'files' if is_files else 'dirs'} for dir_id {self._cur_dir_id}")
 
-    def get_db_file_info(self, file_name: str) -> tuple[
+    def get_db_file_info(self, file_name: str, connection: Connection | None = None) -> tuple[
             int, float, float, int, int, str]:
         """Query if exists fsrecords/files details on file.
             Returned fields:
@@ -355,48 +356,48 @@ class FileManagerDatabase(SQLite3connection):
         """
         for row in self._exec_query(
                 _FS_FILE_SELECT, (self._disk_id, self._cur_dir_id, file_name),
-                commit=False):
+                commit=False, connection=connection):
             return row[0], row[1], row[2], row[3], row[4], row[5]
         return 0, 0, 0, 0, 0, ""
 
-    def select_file_id(self, sha1: str, mtime: float) -> int:
+    def select_file_id(self, sha1: str, mtime: float, connection: Connection | None = None) -> int:
         """Selects file_id (files.ROWID) by SHA, updates mtime if needed."""
-        for row in self._exec_query(_FILE_SELECT, (sha1,), commit=False):
+        for row in self._exec_query(_FILE_SELECT, (sha1,), commit=False, connection=connection):
             if row[1] > mtime:
-                self._exec_query(_FILE_TIME_UPDATE, (mtime, mtime, row[0]))
+                self._exec_query(_FILE_TIME_UPDATE, (mtime, mtime, row[0]), connection=connection)
             return row[0]
         return 0
 
     def select_update_file_record(
             self, sha1: str, mtime: float, size: int,
-            file_name: str, file_type: str) -> int:
+            file_name: str, file_type: str, connection: Connection | None = None) -> int:
         """Select and update or insert file record."""
         if not sha1:
             raise ValueError(f"Empty SHA1 for file {file_name}")
         if not file_name:
             file_name = ""
             logging.warning(f"Empty file_name for file with SHA1 {sha1}")
-        file_id = self.select_file_id(sha1, mtime)
+        file_id = self.select_file_id(sha1, mtime, connection=connection)
         if file_id:
             return file_id
 
         self._exec_query(_FILE_INSERT, (
             size, sha1, mtime, file_name, file_type,
-            self.get_media_type(file_type)))
-        return self.select_file_id(sha1, mtime)
+            self.get_media_type(file_type)), connection=connection)
+        return self.select_file_id(sha1, mtime, connection=connection)
 
     def update_fsrecord(
             self, fsrecord_id: int, file_name: str,
-            mtime: float, file_id: int) -> None:
+            mtime: float, file_id: int, connection: Connection | None = None) -> None:
         """Update or insert fsrecords."""
         if fsrecord_id:
             self._exec_query(_FSFILE_UPDATE, (
-                mtime, file_id, time(), fsrecord_id))
+                mtime, file_id, time(), fsrecord_id), connection=connection)
         else:
             self._exec_query(
                 _FSFILE_INSERT,
                 (file_name, self._cur_dir_id, self._disk_id, mtime, file_id,
-                 time()))
+                 time()), connection=connection)
 
     def get_path_on_disk(self, disk: str, path: str) -> int:
         """Returns dir_id of the path on disk."""

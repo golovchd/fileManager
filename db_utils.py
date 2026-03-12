@@ -76,6 +76,7 @@ class SQLite3connection:
     """Basic sqlite3 coonection functionality."""
 
     def __init__(self, db_path: Path):
+        self._db_path = db_path
         initialize_database(db_path)
         self._con = sqlite3.connect(db_path, timeout=10)
         self.SQLITE_LIMIT_VARIABLE_NUMBER = max(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, 32766) if hasattr(sqlite3, 'SQLITE_LIMIT_VARIABLE_NUMBER') else 32766
@@ -91,14 +92,20 @@ class SQLite3connection:
         if self._con:
             self._con.close()
 
-    def _exec_query(self, sql: str, params: Sequence, commit=True):
+    def get_connection(self) -> sqlite3.Connection:
+        """Returns the sqlite3 connection."""
+        return sqlite3.connect(self._db_path, timeout=10)
+
+    def _exec_query(self, sql: str, params: Sequence, commit: bool=True, connection: sqlite3.Connection | None = None):
         """SQL quesy executor with logging."""
         delay: float = _RETRY_FIRST_DELAY
+        working_con = connection if connection else self._con
+
         for retry in range(_RETRY_COUNT):
             try:
-                result = self._con.execute(sql, params)
+                result = working_con.execute(sql, params)
                 if commit:
-                    self._con.commit()
+                    working_con.commit()
                 logging.debug("SQL succeed: %s with %r", sql, params)
                 return result
             except sqlite3.OperationalError as e:
