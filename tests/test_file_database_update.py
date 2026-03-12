@@ -12,6 +12,7 @@ sys.path.append(str(SCRIPT_DIR.parent))
 
 from db_utils import create_db, dump_db  # noqa: E402
 from file_database_update import FileDatabaseUpdater  # noqa: E402
+from storage_client import StorageClient  # noqa: E402
 
 _DB_TEST_DB_DUMP = [SCRIPT_DIR.parent / "test_db/fileManager_test_dump.sql"]
 _REFERENCE_DB_NAME = "reference.db"
@@ -49,7 +50,7 @@ def test_error_missing_setup(tmp_path: Path) -> None:
         with pytest.raises(ValueError):
             db.set_cur_dir(tmp_path)
         with pytest.raises(ValueError):
-            db.update_file("bar.txt")
+            db.update_file("bar.txt", StorageClient(str(tmp_path)))
         with pytest.raises(ValueError):
             db.clean_cur_dir(["foo.log", "bar.txt"], True)
         with pytest.raises(ValueError):

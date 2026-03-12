@@ -12,6 +12,8 @@ from pathlib import Path
 from time import CLOCK_MONOTONIC, clock_gettime_ns
 from typing import Any
 
+from storage_client import StorageClient
+
 _IGNORED_DIRS = [".", "..", "$RECYCLE.BIN"]
 
 PARTSIZES_DEFAULTS : list[int] = [ ## Default Partsizes Map (bytes)
@@ -72,21 +74,6 @@ def get_path_disk_info(dir_path: Path) -> dict[str, Any]:
                 "label": device_info["label"] or "",
             }
     raise ValueError(f"Failed to locate device for path {dir_path}")
-
-
-def read_dir(dir_path: Path) -> tuple[list[str], list[str]]:
-    """Reading details of files and subdirs."""
-    try:
-        files = sorted([file.name for file in dir_path.iterdir()
-                        if file.is_file() and not file.is_symlink()])
-        dirs = sorted([dir.name for dir in dir_path.iterdir()
-                       if dir.is_dir() and not dir.is_symlink() and
-                       dir.name not in _IGNORED_DIRS])
-        logging.debug(f"read_dir({dir_path}) dirs: {dirs}, files: {files}")
-        return files, dirs
-    except PermissionError:
-        logging.warning(f"read_dir missing permission to read {dir_path}")
-        return [], []
 
 
 def generate_file_sha1(
@@ -168,3 +155,60 @@ def get_possible_etags(file_path: Path) -> list[str]:
     return [
         calc_etag(file_path, partsize) for partsize in PARTSIZES_DEFAULTS
     ]
+
+
+class FsClient(StorageClient):
+    def __init__(self, media: str) -> None:
+        super().__init__(media)
+        self.cur_path = get_full_dir_path(Path(media))
+        disk_info = get_path_disk_info(self.cur_path)
+        self._disk_uuid = disk_info["uuid"]
+        self._disk_size = disk_info["size"]
+        self._disk_label = disk_info["label"]
+        self.mountpoint = get_mount_path(self.cur_path)
+
+    def get_disk_info(self) -> dict[str, Any]:
+        return {
+            "uuid": self._disk_uuid,
+            "size": self._disk_size,
+            "label": self._disk_label,
+        }
+
+    @property
+    def media(self) -> str:
+        return str(self.cur_path)
+
+    @property
+    def slow_file_read(self) -> bool:
+        return False
+
+    @property
+    def disk_name(self) -> str:
+        return self._disk_label or self._disk_uuid or ""
+
+    def is_symlink(self, path: str = '') -> bool:
+        return (self.cur_path / path).is_symlink() if path else self.cur_path.is_symlink()
+
+    def set_media(self, media: str):
+        self._media = media
+        self.cur_path = get_full_dir_path(Path(media))
+
+    def get_path_from_mount(self) -> list[str]:
+        return get_path_from_mount(self.cur_path)
+
+    def read_dir(self) -> tuple[list[str], list[str]]:
+        """Reading details of files and subdirs."""
+        try:
+            files = sorted([file.name for file in self.cur_path.iterdir()
+                            if file.is_file() and not file.is_symlink()])
+            dirs = sorted([dir.name for dir in self.cur_path.iterdir()
+                        if dir.is_dir() and not dir.is_symlink() and
+                        dir.name not in _IGNORED_DIRS])
+            logging.debug(f"read_dir({self.cur_path}) dirs: {dirs}, files: {files}")
+            return files, dirs
+        except PermissionError:
+            logging.warning(f"read_dir missing permission to read {self.cur_path}")
+            return [], []
+
+    def read_file_info(self, file_path: str, get_hash: bool = False) -> tuple[str, str, int, float, str, int]:
+        return read_file(self.cur_path / file_path, get_sha1=get_hash)

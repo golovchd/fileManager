@@ -10,11 +10,11 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 TEST_DATA_DIR = SCRIPT_DIR.parent / "test_data"
 sys.path.append(str(SCRIPT_DIR.parent))
 
-from file_utils import (PARTSIZES_DEFAULTS, calc_etag,  # noqa: E402
+from file_utils import (PARTSIZES_DEFAULTS, FsClient, calc_etag,  # noqa: E402
                         check_etag, factor_of_1MB, generate_file_sha1,
                         get_confirmation, get_full_dir_path, get_mount_path,
                         get_path_disk_info, get_path_from_mount,
-                        get_possible_etags, read_dir, read_file)
+                        get_possible_etags, read_file)
 
 
 def test_get_full_dir_path():
@@ -106,7 +106,8 @@ def test_get_path_from_mount_real_path():
     ],
 )
 def test_read_dir(test_path, expected_files, expected_dirs):
-    files, sub_dirs = read_dir(SCRIPT_DIR.parent / test_path)
+    sc = FsClient(str(SCRIPT_DIR.parent / test_path))
+    files, sub_dirs = sc.read_dir()
     assert sorted(files) == sorted(expected_files)
     assert sorted(sub_dirs) == sorted(expected_dirs)
 
