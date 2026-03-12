@@ -46,7 +46,7 @@ class FileDatabaseUpdater(FileManagerDatabase):
 
         logging.debug(f"Update fsrecord {fsrecord_id} from {storage_client.media}/{file_full_name}, "
                     f"SHA1={sha1}, {size} B, {file_name} {file_type}")
-        for attempt in range(3):
+        for attempt in range(2):
             try:
                 new_file_id = self.select_update_file_record(
                     sha1, mtime, size, file_name, file_type
@@ -88,6 +88,7 @@ class FileDatabaseUpdater(FileManagerDatabase):
         """Calculates and prints dir processing statistic."""
         process_time_ns = clock_gettime_ns(CLOCK_MONOTONIC) - start_time_ns
         average_process_speed = (files_total_size * 1E3) / process_time_ns
+        file_process_speed = (files_count * 1E3) / process_time_ns
         if files_hash_time_ns:
             average_hash_time = (files_hashed_size * 1E3) / files_hash_time_ns
         else:
@@ -96,7 +97,7 @@ class FileDatabaseUpdater(FileManagerDatabase):
                             if files_total_size else 0)
         hashing_time_pct = 100 * files_hash_time_ns / process_time_ns
         logging.info(f"Processed {path} in {process_time_ns / 1E9:.2f} sec, "
-                     f"{files_count} files, "
+                     f"{files_count} files, {file_process_speed:.2f} files/sec, "
                      f"total size {files_total_size / 1E6:.2f} MB, "
                      f"{average_process_speed:.2f} MB/sec.")
         logging.info(f"In {path} hashed {hashing_size_pct:.1f}% by size, "
