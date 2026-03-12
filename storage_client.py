@@ -11,6 +11,14 @@ class StorageClient:
     def media(self) -> str:
         return self._media
 
+    @property
+    def slow_file_read(self) -> bool:
+        raise NotImplementedError("slow_file_read method must be implemented by subclasses")
+
+    @property
+    def disk_name(self) -> str:
+        raise NotImplementedError("disk_name method must be implemented by subclasses")
+
     def is_symlink(self, path: str = '') -> bool:
         raise NotImplementedError("is_symlink method must be implemented by subclasses")
 

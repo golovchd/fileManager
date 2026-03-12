@@ -31,6 +31,10 @@ class S3Client(StorageClient):
         return {"uuid": self._bucket, "size": 1, "label": self._bucket}
 
     @property
+    def slow_file_read(self) -> bool:
+        return True
+
+    @property
     def disk_name(self) -> str:
         return self._bucket
 

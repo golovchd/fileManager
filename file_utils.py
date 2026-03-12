@@ -179,6 +179,10 @@ class FsClient(StorageClient):
         return str(self.cur_path)
 
     @property
+    def slow_file_read(self) -> bool:
+        return False
+
+    @property
     def disk_name(self) -> str:
         return self._disk_label or self._disk_uuid or ""
 
