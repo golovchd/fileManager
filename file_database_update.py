@@ -9,6 +9,7 @@ from file_database import FileManagerDatabase
 from storage_client import StorageClient
 
 _MAX_ORFAN_SEARCH_DEPTH = 256
+_FILE_INSERT_RETRY_COUNT = 2
 
 
 class FileDatabaseUpdater(FileManagerDatabase):
@@ -46,7 +47,7 @@ class FileDatabaseUpdater(FileManagerDatabase):
 
         logging.debug(f"Update fsrecord {fsrecord_id} from {storage_client.media}/{file_full_name}, "
                     f"SHA1={sha1}, {size} B, {file_name} {file_type}")
-        for attempt in range(2):
+        for attempt in range(_FILE_INSERT_RETRY_COUNT):
             try:
                 new_file_id = self.select_update_file_record(
                     sha1, mtime, size, file_name, file_type
@@ -59,7 +60,7 @@ class FileDatabaseUpdater(FileManagerDatabase):
                 logging.warning(f"update_file: Attempt {attempt + 1} failed to insert file record for {storage_client.media}/{file_full_name}, due to {error}, retrying...")
                 continue
 
-        logging.error(f"update_file: Failed to insert file record for {storage_client.media}/{file_full_name} after 3 attempts, ")
+        logging.error(f"update_file: Failed to insert file record for {storage_client.media}/{file_full_name} after {_FILE_INSERT_RETRY_COUNT} attempts, ")
         return size, size, hash_time
 
 
