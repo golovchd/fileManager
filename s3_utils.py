@@ -60,7 +60,7 @@ class S3Client(StorageClient):
     def read_file_info(self, file_path: str, get_hash: bool = False):
         response = self._client.head_object(
                 Bucket=self._bucket,
-                Key=f"{self._prefix}/{file_path}"
+                Key=f"{self._prefix}/{file_path}" if self._prefix else file_path
         )
         file_name_parts = file_path.split(".")
         if len(file_name_parts) > 1 and file_name_parts[0]:
