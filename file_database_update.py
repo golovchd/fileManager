@@ -112,9 +112,10 @@ class FileDatabaseUpdater(FileManagerDatabase):
             average_hash_time = (files_hashed_size * 1E3) / files_hash_time_ns
         else:
             average_hash_time = 0
+        used_threads = min(self.threads, files_count) if files_count else 1
         hashing_size_pct = (100 * files_hashed_size / files_total_size
                             if files_total_size else 0)
-        hashing_time_pct = 100 * files_hash_time_ns / process_time_ns
+        hashing_time_pct = 100 * files_hash_time_ns / (process_time_ns * used_threads)
         logging.info(f"Processed {path} in {process_time_ns / 1E9:.2f} sec, "
                      f"{files_count} files, {file_process_speed:.2f} files/sec, "
                      f"total size {files_total_size / 1E6:.2f} MB, "
