@@ -12,12 +12,13 @@ from storage_client import StorageClient
 
 _MAX_ORFAN_SEARCH_DEPTH = 256
 _FILE_INSERT_RETRY_COUNT = 2
-_MAX_FILE_UPDATE_THREADS = 8
+
 
 
 class FileDatabaseUpdater(FileManagerDatabase):
-    def __init__(self, db_path: Path, rehash_time: float, storage_client: StorageClient):
+    def __init__(self, db_path: Path, rehash_time: float, threads: int, storage_client: StorageClient):
         super().__init__(db_path, rehash_time)
+        self.threads = threads
         self.storage_client = storage_client
 
     def update_file(self, file_full_name: str) -> tuple[int, int, int]:
@@ -85,8 +86,12 @@ class FileDatabaseUpdater(FileManagerDatabase):
         hashed_size = 0
         total_size = 0
         total_hash_time = 0
-        with ThreadPoolExecutor(max_workers=_MAX_FILE_UPDATE_THREADS) as executor:
+        logging.debug(f"update_files: Starting processing {len(files)} files under {self.storage_client.media} in {self.threads} threads")
+        start_time_ns = clock_gettime_ns(CLOCK_MONOTONIC)
+        with ThreadPoolExecutor(max_workers=self.threads) as executor:
             results = executor.map(self.update_file, files)
+        process_time_ns = clock_gettime_ns(CLOCK_MONOTONIC) - start_time_ns
+        logging.debug(f"update_files: Processed {len(files)} files under {self.storage_client.media} in {self.threads} threads in {process_time_ns / 1E9:.2f} sec")
         for hashsed, size, hash_time in results:
             hashed_size += hashsed
             total_size += size

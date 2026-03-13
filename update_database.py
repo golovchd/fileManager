@@ -3,6 +3,7 @@
 
 import argparse
 import logging
+import os
 import sys
 import time
 from pathlib import Path
@@ -12,6 +13,7 @@ from file_database_update import FileDatabaseUpdater
 from storage_interface import get_storage_client
 
 REHASH_INTERVAL = 180  # Number of days before re-hash file if not changed
+DEFAULT_MAX_FILE_UPDATE_THREADS = 4
 
 
 def main(argv):
@@ -38,6 +40,10 @@ def main(argv):
         help="Database file",
         required=False,
         default=DEFAULT_DATABASE)
+    default_threads = os.cpu_count() // 4 if os.cpu_count() else DEFAULT_MAX_FILE_UPDATE_THREADS
+    arg_parser.add_argument("-t", "--threads",
+                            help=f"Run file reading/hashing in multiple threads, specify number of threads or use -t without value to use default 1/4 of CPU cores ({default_threads})",
+                            type=int, nargs="?", const=default_threads, default=1)
     arg_parser.add_argument("-v", "--verbose",
                             help="Print verbose output",
                             action="count", default=0)
@@ -51,7 +57,7 @@ def main(argv):
 
     rehash_time = time.time() - args.rehash_interval * 24 * 3600
     with FileDatabaseUpdater(
-          args.database, rehash_time, get_storage_client(args.media)) as file_db:
+          args.database, rehash_time, args.threads, get_storage_client(args.media)) as file_db:
         file_db.update_dir(max_depth=args.max_depth)
         file_db.handle_orfans(clear_orfan_files=args.clear_orfan_files)
 
