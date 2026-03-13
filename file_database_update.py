@@ -30,26 +30,29 @@ class FileDatabaseUpdater(FileManagerDatabase):
             logging.warning("update_file called for symlink %s/%s", self._cur_dir_path, file_full_name)
             return 0, 0, 0
 
-        db_connection = self.get_connection()   # Using dedicated connection for each thread to avoid locking issues
+        db_connection = self.get_connection() if self.threads > 1 else None   # Using dedicated connection for each thread to avoid locking issues
         fsrecord_id, sha1_read_date, db_file_mtime, file_id, db_file_size, db_file_sha1 = self.get_db_file_info(file_full_name, connection=db_connection)
 
         if self.storage_client.slow_file_read:
             if fsrecord_id and db_file_sha1:
                 logging.debug(f"update_file: slow read, skipping hashing for {self.storage_client.media}/{file_full_name}, " +
                               f"SHA1 in DB {db_file_sha1}, skipped update of fsrecord_id={fsrecord_id}")
-                db_connection.close()
+                if db_connection:
+                    db_connection.close()
                 return 0, db_file_size, 0
         else:
             file_name, file_type, size, mtime, _, _ = self.storage_client.read_file_info(file_full_name, False)
             if size == 0 or file_name == "" and file_type == "":
                 logging.warning(f"update_file: size {size} for {self.storage_client.media}/{file_full_name}, " +
                                 (f"skipping update of fsrecord_id={fsrecord_id}" if fsrecord_id else f"skipping insertion into DB"))
-                db_connection.close()
+                if db_connection:
+                    db_connection.close()
                 return 0, 0, 0
 
             if (self._rehash_time < sha1_read_date and
                     db_file_size == size and db_file_mtime == mtime):
-                db_connection.close()
+                if db_connection:
+                    db_connection.close()
                 return 0, size, 0   # Current file details matching DB, no re-hash
 
         file_name, file_type, size, mtime, sha1, hash_time = self.storage_client.read_file_info(file_full_name, True)
@@ -57,7 +60,8 @@ class FileDatabaseUpdater(FileManagerDatabase):
             logging.warning(f"Failed to get SHA1 for {file_full_name}, "
                             f"SHA1 in DB {db_file_sha1}, skipped  " +
                             (f"update of fsrecord_id={fsrecord_id}" if fsrecord_id else "insertion into DB"))
-            db_connection.close()
+            if db_connection:
+                db_connection.close()
             return 0, size, 0   # Skip file if unable to read
 
         logging.debug(f"Update fsrecord {fsrecord_id} from {self.storage_client.media}/{file_full_name}, "
@@ -70,14 +74,16 @@ class FileDatabaseUpdater(FileManagerDatabase):
                 self.update_fsrecord(fsrecord_id, file_full_name, mtime, new_file_id, connection=db_connection)
                 # TODO: Handle deletion of old `files` record file_id
                 del file_id
-                db_connection.close()
+                if db_connection:
+                    db_connection.close()
                 return size, size, hash_time
             except IntegrityError as error:
                 logging.warning(f"update_file: Attempt {attempt + 1} failed to insert file record for {self.storage_client.media}/{file_full_name}, due to {error}, retrying...")
                 continue
 
         logging.error(f"update_file: Failed to insert file record for {self.storage_client.media}/{file_full_name} after {_FILE_INSERT_RETRY_COUNT} attempts, ")
-        db_connection.close()
+        if db_connection:
+            db_connection.close()
         return size, size, hash_time
 
     def update_files(self, files: list[str]) -> tuple[int, int, int]:
@@ -86,16 +92,23 @@ class FileDatabaseUpdater(FileManagerDatabase):
         hashed_size = 0
         total_size = 0
         total_hash_time = 0
-        logging.debug(f"update_files: Starting processing {len(files)} files under {self.storage_client.media} in {self.threads} threads")
-        start_time_ns = clock_gettime_ns(CLOCK_MONOTONIC)
-        with ThreadPoolExecutor(max_workers=self.threads) as executor:
-            results = executor.map(self.update_file, files)
-        process_time_ns = clock_gettime_ns(CLOCK_MONOTONIC) - start_time_ns
-        logging.debug(f"update_files: Processed {len(files)} files under {self.storage_client.media} in {self.threads} threads in {process_time_ns / 1E9:.2f} sec")
-        for hashsed, size, hash_time in results:
-            hashed_size += hashsed
-            total_size += size
-            total_hash_time += hash_time
+        if self.threads > 1:
+            logging.debug(f"update_files: Starting processing {len(files)} files under {self.storage_client.media} in {self.threads} threads")
+            start_time_ns = clock_gettime_ns(CLOCK_MONOTONIC)
+            with ThreadPoolExecutor(max_workers=self.threads) as executor:
+                results = executor.map(self.update_file, files)
+            process_time_ns = clock_gettime_ns(CLOCK_MONOTONIC) - start_time_ns
+            logging.debug(f"update_files: Processed {len(files)} files under {self.storage_client.media} in {self.threads} threads in {process_time_ns / 1E9:.2f} sec")
+            for hashsed, size, hash_time in results:
+                hashed_size += hashsed
+                total_size += size
+                total_hash_time += hash_time
+        else:
+            for file_name in files:
+                hashsed, size, hash_time = self.update_file(file_name)
+                hashed_size += hashsed
+                total_size += size
+                total_hash_time += hash_time
 
         return hashed_size, total_size, total_hash_time
 
