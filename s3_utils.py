@@ -17,7 +17,7 @@ class S3Client(StorageClient):
         del path
         return False
 
-    def set_media(self, media: str):
+    def set_media(self, media: str) -> None:
         if media.startswith("s3://"):
             media = media[5:]
         path_parts = media.rstrip("/").split("/", 1)
@@ -57,7 +57,7 @@ class S3Client(StorageClient):
 
         return files, dirs
 
-    def read_file_info(self, file_path: str, get_hash: bool = False):
+    def read_file_info(self, file_path: str, get_hash: bool = False) -> tuple[str, str, int, float, str, int]:
         response = self._client.head_object(
                 Bucket=self._bucket,
                 Key=f"{self._prefix}/{file_path}" if self._prefix else file_path

@@ -148,7 +148,11 @@ class FileDatabaseUpdater(FileManagerDatabase):
                      dir_path, len(files), len(sub_dirs))
         self.clean_cur_dir(files, is_files=True)
         self.clean_cur_dir(sub_dirs, is_files=False)
-        files_hashed_size, files_total_size, files_hash_time_ns = (self.update_files(files))
+        db_files, db_dirs = self.get_dir_items(self._cur_dir_id)
+        files.sort(key=lambda x: f"{'1' if x in db_files else '0'}_{x}")
+        sub_dirs.sort(key=lambda x: f"{'1' if x in db_dirs else '0'}_{x}")
+
+        files_hashed_size, files_total_size, files_hash_time_ns = self.update_files([file for file in files if file not in db_files])
 
         if max_depth != 0:
             for sub_dir_name in sub_dirs:
@@ -165,6 +169,9 @@ class FileDatabaseUpdater(FileManagerDatabase):
                 files_hashed_size += dir_hashed_size
                 files_total_size += dir_size
                 files_hash_time_ns += hash_time_ns
+
+        files_hashed_size, files_total_size, files_hash_time_ns = self.update_files(list(db_files.keys()))
+
         self.print_statistic(dir_path, start_time, files_count, files_hashed_size,
                              files_total_size, files_hash_time_ns)
         return (

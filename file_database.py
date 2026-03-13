@@ -22,6 +22,9 @@ _DISK_INSERT = ("INSERT INTO `disks` (`UUID`, `DiskSize`, `Label`) "
 
 _TOP_DIR_SELECT = ("SELECT `ROWID` FROM `fsrecords` WHERE `DiskId` = ? AND"
                    " `ParentId` IS NULL AND `Name` = '' AND `FileId` IS NULL")
+_DIR_FSRECORD_SELECT = ("SELECT `ROWID`, `Name`, `FileId` FROM `fsrecords` WHERE"
+                        " `DiskId` = ? AND `ParentId` = ?"
+                        " ORDER BY `DiskId`, `ROWID`")
 _FSRECORD_SELECT = ("SELECT `ROWID`, `SHA1ReadDate` FROM `fsrecords` WHERE"
                     " `DiskId` = ? AND `ParentId` = ? AND `Name` = ? AND"
                     " `FileId` IS {} NULL")
@@ -214,6 +217,17 @@ class FileManagerDatabase(SQLite3connection):
         """Returns media type from file type (extension)."""
         del file_type
         return None
+
+    def get_dir_items(self, parent_id: int) -> tuple[dict[str, str], dict[str, str]]:
+        """Getting details of files and subdirs for given dir id."""
+        files = {}
+        dirs = {}
+        for row in self._exec_query(_DIR_FSRECORD_SELECT, (self._disk_id, parent_id), commit=False):
+            if row[2] is None:
+                dirs[row[1]] = row[0]
+            else:
+                files[row[1]] = row[0]
+        return files, dirs
 
     def get_fsrecord_id(
                 self, fsrecord_name, parent_id, is_file=False, insert_dirs=True
