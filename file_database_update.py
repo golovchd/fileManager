@@ -108,11 +108,11 @@ class FileDatabaseUpdater(FileManagerDatabase):
         process_time_ns = clock_gettime_ns(CLOCK_MONOTONIC) - start_time_ns
         average_process_speed = (files_total_size * 1E3) / process_time_ns
         file_process_speed = (files_count * 1E9) / process_time_ns
-        if files_hash_time_ns:
-            average_hash_time = (files_hashed_size * 1E3) / files_hash_time_ns
-        else:
-            average_hash_time = 0
         used_threads = min(self.threads, files_count) if files_count else 1
+        if files_hash_time_ns:
+            average_hash_speed = (files_hashed_size * 1E3) / (files_hash_time_ns / used_threads)
+        else:
+            average_hash_speed = 0
         hashing_size_pct = (100 * files_hashed_size / files_total_size
                             if files_total_size else 0)
         hashing_time_pct = 100 * files_hash_time_ns / (process_time_ns * used_threads)
@@ -124,7 +124,7 @@ class FileDatabaseUpdater(FileManagerDatabase):
                      f"{hashing_time_pct:.1f}% by time, "
                      f"{files_hashed_size / 1E6:.2f} MB in "
                      f"{files_hash_time_ns / 1E9:.2f} sec, "
-                     f"{average_hash_time:.2f} MB/sec.")
+                     f"{average_hash_speed:.2f} MB/sec.")
 
     def set_cur_dir(self) -> None:
         """Saving/updating dir with a path to disk root. COUNT NOT BE CALLED IN CONCURRENT EXECUTION."""
