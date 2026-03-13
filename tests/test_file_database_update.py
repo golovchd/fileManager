@@ -23,7 +23,7 @@ def test_delete_dir(tmp_path):
     reference_db_path = tmp_path / _REFERENCE_DB_NAME
     create_db(reference_db_path, _DB_TEST_DB_DUMP)
     with FileDatabaseUpdater(
-            reference_db_path, time.time()) as file_db:
+            reference_db_path, time.time(), 1, StorageClient(str(tmp_path))) as file_db:
         file_db.set_disk('0a2e2cb7-4543-43b3-a04a-40959889bd45', 59609420, '')
         file_db._exec_query("DELETE FROM `fsrecords` WHERE `Name` = ?",
                             ("storage",), commit=True)
@@ -44,13 +44,13 @@ def test_delete_dir(tmp_path):
 
 
 def test_error_missing_setup(tmp_path: Path) -> None:
-    with FileDatabaseUpdater(tmp_path / _TEST_DB_NAME, time.time()) as db:
+    with FileDatabaseUpdater(tmp_path / _TEST_DB_NAME, time.time(), 1, StorageClient(str(tmp_path))) as db:
         with pytest.raises(ValueError):
             db.set_top_dir()
         with pytest.raises(ValueError):
-            db.set_cur_dir(tmp_path)
+            db.set_cur_dir()
         with pytest.raises(ValueError):
-            db.update_file("bar.txt", StorageClient(str(tmp_path)))
+            db.update_file("bar.txt")
         with pytest.raises(ValueError):
             db.clean_cur_dir(["foo.log", "bar.txt"], True)
         with pytest.raises(ValueError):
