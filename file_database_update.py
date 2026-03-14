@@ -170,7 +170,10 @@ class FileDatabaseUpdater(FileManagerDatabase):
                 files_total_size += dir_size
                 files_hash_time_ns += hash_time_ns
 
-        files_hashed_size, files_total_size, files_hash_time_ns = self.update_files(list(db_files.keys()))
+        db_files_hashed_size, db_files_total_size, db_files_hash_time_ns = self.update_files(list(db_files.keys()))
+        files_hashed_size += db_files_hashed_size
+        files_total_size += db_files_total_size
+        files_hash_time_ns += db_files_hash_time_ns
 
         self.print_statistic(dir_path, start_time, files_count, files_hashed_size,
                              files_total_size, files_hash_time_ns)
