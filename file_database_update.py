@@ -83,15 +83,19 @@ class FileDatabaseUpdater(FileManagerDatabase):
     def update_files(self, files: list[str]) -> tuple[int, int, int]:
         """Updating files in current dir.
             Returns hashed size, file size, hash time in ns."""
+        if not files:
+            return 0, 0, 0
+
         hashed_size = 0
         total_size = 0
         total_hash_time = 0
-        logging.debug(f"update_files: Starting processing {len(files)} files under {self.storage_client.media} in {self.threads} threads")
+        thread_count = min(self.threads, len(files))
+        logging.debug(f"update_files: Starting processing {len(files)} files under {self.storage_client.media} in {thread_count} threads")
         start_time_ns = clock_gettime_ns(CLOCK_MONOTONIC)
-        with ThreadPoolExecutor(max_workers=self.threads) as executor:
+        with ThreadPoolExecutor(max_workers=thread_count) as executor:
             results = executor.map(self.update_file, files)
         process_time_ns = clock_gettime_ns(CLOCK_MONOTONIC) - start_time_ns
-        logging.debug(f"update_files: Processed {len(files)} files under {self.storage_client.media} in {self.threads} threads in {process_time_ns / 1E9:.2f} sec")
+        logging.debug(f"update_files: Processed {len(files)} files under {self.storage_client.media} in {thread_count} threads in {process_time_ns / 1E9:.2f} sec")
         for hashsed, size, hash_time in results:
             hashed_size += hashsed
             total_size += size
@@ -170,7 +174,8 @@ class FileDatabaseUpdater(FileManagerDatabase):
                 files_total_size += dir_size
                 files_hash_time_ns += hash_time_ns
 
-        db_files_hashed_size, db_files_total_size, db_files_hash_time_ns = self.update_files(list(db_files.keys()))
+        self.storage_client.set_media(dir_path)
+        db_files_hashed_size, db_files_total_size, db_files_hash_time_ns = self.update_files([file for file in files if file in db_files])
         files_hashed_size += db_files_hashed_size
         files_total_size += db_files_total_size
         files_hash_time_ns += db_files_hash_time_ns
