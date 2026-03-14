@@ -189,7 +189,7 @@ class FsClient(StorageClient):
     def is_symlink(self, path: str = '') -> bool:
         return (self.cur_path / path).is_symlink() if path else self.cur_path.is_symlink()
 
-    def set_media(self, media: str):
+    def set_media(self, media: str) -> None:
         self._media = media
         self.cur_path = get_full_dir_path(Path(media))
 
