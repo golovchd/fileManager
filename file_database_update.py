@@ -160,6 +160,10 @@ class FileDatabaseUpdater(FileManagerDatabase):
 
         if max_depth != 0:
             for sub_dir_name in sub_dirs:
+                if not sub_dir_name:
+                    # TODO: Handle empty subdir name, currently just skipping with warning log
+                    logging.warning("Skipping empty subdir name in %s", dir_path)
+                    continue
                 self.storage_client.set_media(dir_path  + '/' + sub_dir_name)
                 if self.storage_client.is_symlink():
                     logging.warning("update_dir called for symlink %s/%s",
