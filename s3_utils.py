@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from time import CLOCK_MONOTONIC, clock_gettime_ns
 from typing import Any
 
 from boto3 import client
@@ -58,6 +59,7 @@ class S3Client(StorageClient):
         return files, dirs
 
     def read_file_info(self, file_path: str, get_hash: bool = False) -> tuple[str, str, int, float, str, int]:
+        start_time = clock_gettime_ns(CLOCK_MONOTONIC)
         response = self._client.head_object(
                 Bucket=self._bucket,
                 Key=f"{self._prefix}/{file_path}" if self._prefix else file_path
@@ -69,8 +71,9 @@ class S3Client(StorageClient):
         else:
             file_name = file_path
             file_type = ""
-        logging.debug(f"read_file_info for s3://{self._bucket}/{self._prefix}/{file_path} got {response}")
+        duration = clock_gettime_ns(CLOCK_MONOTONIC) - start_time
+        logging.debug(f"read_file_info for s3://{self._bucket}/{self._prefix}/{file_path} in {duration / 1E9:.2f} sec. got {response}")
         return (
             file_name, file_type, response["ContentLength"], response["LastModified"].timestamp(),
-            response["ETag"].strip('"'), 0
+            response["ETag"].strip('"'), duration
         )
