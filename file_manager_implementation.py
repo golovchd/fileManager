@@ -10,10 +10,8 @@ from file_database import FileManagerDatabase
 from file_utils import get_disk_info
 from utils import print_table, timestamp2exif_str
 
-SORT_OPTIONS = ["id", "uuid", "label", "disk-size", "files-size", "usage"]
-SORT_OPTIONS_UNIQUE = SORT_OPTIONS[:]
-SORT_OPTIONS_UNIQUE.insert(5, "unique-size")
-SORT_OPTIONS_UNIQUE += ["unique-usage", "unique-percent"]
+SORT_OPTIONS = ["id", "uuid", "label", "file-count", "object-count", "disk-size", "files-size", "usage"]
+SORT_OPTIONS_UNIQUE = ["id", "uuid", "label", "disk-size", "files-size", "unique-size", "usage", "unique-usage", "unique-percent"]
 
 _BACKUP_COUNT = ("SELECT `fsrecords`.*, `files`.* FROM ("
                  "  SELECT * FROM ("
@@ -29,7 +27,10 @@ _BACKUP_COUNT = ("SELECT `fsrecords`.*, `files`.* FROM ("
                  "WHERE `DiskId` = ? {}")
 _DISKS_SELECT = "SELECT `ROWID`, `UUID`, `Label`, `DiskSize`/1024 FROM `disks`"
 _DISK_SELECT_SIZE = ("SELECT `disks`.`ROWID`, `UUID`, `Label`, "
-                     "`DiskSize`/1024, SUM(`FileSize`)/1048576 FROM `disks`"
+                     "COUNT(DISTINCT `FileId`) AS `FilesCount`, "
+                     "COUNT(DISTINCT `fsrecords`.ROWID) AS `ObjectCount`, "
+                     "`DiskSize`/1024 AS `DiskSizeMiB`, SUM(`FileSize`)/1048576 AS `FilesSizeMiB` "
+                     "FROM `disks` "
                      "INNER JOIN `fsrecords` ON `DiskId` = `disks`.`ROWID` "
                      "INNER JOIN `files` ON `files`.`ROWID` = `FileId` "
                      "WHERE `disks`.`ROWID` IN ({})"
@@ -91,7 +92,7 @@ class FileUtils(FileManagerDatabase):
                 continue
             row = list(row)
             if cal_size:
-                row.append(round(100 * row[-1] / row[-2], 2))
+                row.append(round(100 * row[-1] / row[-2], 2) if row[-2] else "N/A")
             disks.append(row)
         return disks
 
@@ -135,14 +136,13 @@ class FileUtils(FileManagerDatabase):
             print_table(disks_list, headers)
             return
 
-        headers.extend(["FilesSize, MiB", "Usage, %"])
+        headers = ["DiskID", "UUID", "Label", "FilesCount", "ObjectCount", "DiskSize, MiB", "FilesSize, MiB", "Usage, %"]
         id_list = tuple(int(disk[0]) for disk in disks_list)
         disk_usage = self.query_disks("", cal_size=True, id_list=id_list)
         sort_idx = SORT_OPTIONS.index(sort_by)
         if sort_idx >= len(disk_usage[0]):
             sort_idx = 0
-        print_table(sorted(disk_usage, key=lambda info: info[sort_idx]),
-                    headers)
+        print_table(sorted(disk_usage, key=lambda info: info[sort_idx]), headers)
 
     def update_disk(self, filter: str) -> None:
         disks_list = self.query_disks(filter)
@@ -167,7 +167,7 @@ class FileUtils(FileManagerDatabase):
             "", size_query=_UNIQUE_FILES_SIZE_DISKS,
             cal_size=True, id_list=id_list)
         for index in range(len(unique_files)):
-            unique_files[index].insert(4, disk_usage[index][4])
+            unique_files[index].insert(4, disk_usage[index][-2])
             unique_files[index].insert(-1, disk_usage[index][-1])
             unique_files[index].append(str(round(
                 100 * int(unique_files[index][5]) /
