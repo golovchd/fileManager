@@ -19,7 +19,7 @@ _BACKUP_COUNT = ("SELECT `fsrecords`.*, `files`.* FROM ("
                  "      AS `FileDisksCount` FROM `fsrecords` "
                  "    WHERE `FileId` IS NOT NULL "
                  "    GROUP BY `FileId`) "
-                 "  WHERE `FileDisksCount` <= ?) AS `count_files` "
+                 "  WHERE `FileDisksCount` {} ?) AS `count_files` "
                  "INNER JOIN `fsrecords` ON "
                  "`count_files`.`FileId` = `fsrecords`.`FileId` "
                  "INNER JOIN `files` ON "
@@ -97,10 +97,10 @@ class FileUtils(FileManagerDatabase):
         return disks
 
     def backups_count(
-            self, disk: str, count_limit: int, parent_path: str) -> int:
+            self, disk: str, count_limit: int, specific_limit: int, parent_path: str) -> int:
         self.set_disk_by_name(disk)
         extra_query = ""
-        params = [count_limit, self._disk_id]
+        params = [specific_limit, self._disk_id] if specific_limit else [count_limit, self._disk_id]
         if parent_path:
             parent_id = self.get_dir_id(
                 parent_path.split("/"), insert_dirs=False)
@@ -110,7 +110,7 @@ class FileUtils(FileManagerDatabase):
             params.extend(subdirs)
         files_list = []
         for row in self._exec_query(
-                _BACKUP_COUNT.format(extra_query), params, commit=False):
+                _BACKUP_COUNT.format('=' if specific_limit else '<=', extra_query), params, commit=False):
             files_list.append([
                 self.get_path(row[1]), row[0], row[7], row[3], row[8]])
         headers = [f"Path on disk {self._disk_label}",

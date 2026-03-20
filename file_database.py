@@ -372,6 +372,7 @@ class FileManagerDatabase(SQLite3connection):
                 _FS_FILE_SELECT, (self._disk_id, self._cur_dir_id, file_name),
                 commit=False, connection=connection):
             return row[0], row[1], row[2], row[3], row[4], row[5]
+        # logging.warning(f"get_db_file_info: no record for file {file_name} in dir_id {self._cur_dir_id} on disk_id {self._disk_id}")
         return 0, 0, 0, 0, 0, ""
 
     def select_file_id(self, sha1: str, mtime: float, connection: Connection | None = None) -> int:

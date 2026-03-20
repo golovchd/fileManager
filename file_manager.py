@@ -42,7 +42,7 @@ def move_command(file_db: FileUtils, args: argparse.Namespace) -> int:
 
 
 def backups_count_command(file_db: FileUtils, args: argparse.Namespace) -> int:
-    return file_db.backups_count(args.disk, args.count_limit, args.parent_path)
+    return file_db.backups_count(args.disk, args.count_limit, args.specific_limit, args.parent_path)
 
 
 def update_disk_command(file_db: FileUtils, args: argparse.Namespace) -> int:
@@ -101,10 +101,15 @@ def parse_arguments() -> argparse.Namespace:
                                "number of copies"))
     backups_count.set_defaults(func=backups_count_command,
                                cmd_name="backups-count")
-    backups_count.add_argument(
+    count_group = backups_count.add_mutually_exclusive_group(required=False)
+    count_group.add_argument(
         "-c", "--count-limit",
         help="Max number of file's backups to select, default 1",
         type=int, default=1)
+    count_group.add_argument(
+        "-s", "--specific-limit",
+        help="Specific number of file's backups to select",
+        type=int)
     backups_count.add_argument("-p", "--parent-path", type=str,
                                help="Filter files by parent path")
 
