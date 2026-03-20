@@ -222,3 +222,23 @@ def test_delete_disk_force(tmp_path: Path, mocker) -> None:
     create_db(reference_db_path, _DB_TEST_DB_1)
     with FileManagerDatabase(reference_db_path, time.time()) as db:
         assert db.delete_disk("61BB-02E2", False, True) == 0
+
+
+@pytest.mark.parametrize(
+    "disk_id, dir_id, expected_files",
+    [
+        (1, 14, {
+            'DSC06979 (copy).JPG': (15, 1.69559020989512157441e+09, 1.69543415968938732153e+09, 2, 3473408, "f8b1465e6340d11f2a28d26cf896e6427ab41f63"),
+            'DSC06979.JPG': (16, 1.6955902099094469547e+09, 1.69543415971338605873e+09, 2, 3473408, "f8b1465e6340d11f2a28d26cf896e6427ab41f63"),
+            'DSC06979c.JPG': (17, 1.69559020993184852597e+09, 1.6954341597253854275e+09, 7, 1215763, "c81bb242e63bb1296fa1062fe5b3118f476193c9"),
+        }),
+        (1, 23, {}),
+    ]
+)
+def test_def_get_db_file_info(tmp_path: Path, disk_id: int, dir_id: int, expected_files: dict[str, tuple[int, float, float, int, int, str]]) -> None:
+    reference_db_path = tmp_path / _TEST_DB_NAME
+    create_db(reference_db_path, _DB_TEST_DB_1)
+    with FileManagerDatabase(reference_db_path, time.time()) as db:
+        db._disk_id = disk_id
+        db._cur_dir_id = dir_id
+        assert db.get_db_file_info() == expected_files
