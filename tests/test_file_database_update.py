@@ -50,7 +50,7 @@ def test_error_missing_setup(tmp_path: Path) -> None:
         with pytest.raises(ValueError):
             db.set_cur_dir()
         with pytest.raises(ValueError):
-            db.update_file("bar.txt")
+            db.update_file("bar.txt", 0, 0, 0, 0, 0, "")
         with pytest.raises(ValueError):
             db.clean_cur_dir(["foo.log", "bar.txt"], True)
         with pytest.raises(ValueError):
