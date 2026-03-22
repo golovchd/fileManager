@@ -10,13 +10,63 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 TEST_DATA_DIR = SCRIPT_DIR.parent / "test_data"
 sys.path.append(str(SCRIPT_DIR.parent))
 
-from db_utils import create_db, dump_db  # noqa: E402
+from db_utils import (DB_SCHEMA, compare_db_with_ignores,  # noqa: E402
+                      create_db, dump_db)
 from file_database_update import FileDatabaseUpdater  # noqa: E402
+from file_utils import FsClient  # noqa: E402
 from storage_client import StorageClient  # noqa: E402
 
 _DB_TEST_DB_DUMP = [SCRIPT_DIR.parent / "test_db/fileManager_test_dump.sql"]
 _REFERENCE_DB_NAME = "reference.db"
 _TEST_DB_NAME = "test.db"
+
+
+# def test_update_dir(tmp_path):
+#     reference_db_path = tmp_path / _REFERENCE_DB_NAME
+#     create_db(reference_db_path, _DB_TEST_DB_DUMP)
+#     test_db_path = tmp_path / _TEST_DB_NAME
+#     create_db(test_db_path, DB_SCHEMA)
+#     test_storage_dir = tmp_path / "storage"
+#     copytree(TEST_DATA_DIR, test_storage_dir)
+#     with FileDatabaseUpdater(
+#             test_db_path, time.time(), 2, FsClient(test_storage_dir)) as new_file_db:
+#         new_file_db.update_dir(max_depth=None)
+#     dump_db(test_db_path, tmp_path / "test_update_dir.sql")
+#     compare_db_with_ignores(reference_db_path, test_db_path)
+
+
+# def test_update_dir_no_hash(tmp_path):
+#     reference_db_path = tmp_path / _REFERENCE_DB_NAME
+#     create_db(reference_db_path, _DB_TEST_DB_DUMP)
+#     test_db_path = tmp_path / _TEST_DB_NAME
+#     create_db(test_db_path, DB_SCHEMA)
+#     test_storage_dir = tmp_path / "storage"
+#     copytree(TEST_DATA_DIR, test_storage_dir)
+#     with FileDatabaseUpdater(
+#             test_db_path, time.time(), 2, FsClient(test_storage_dir)) as new_file_db:
+#         new_file_db.update_dir(max_depth=None)
+#     with FileDatabaseUpdater(
+#             test_db_path, time.time() - 3600, 2, FsClient(test_storage_dir)) as new_file_db:
+#         new_file_db.update_dir(max_depth=None)
+#     dump_db(test_db_path, tmp_path / "test_update_dir_no_hash.sql")
+#     compare_db_with_ignores(reference_db_path, test_db_path)
+
+
+# def test_update_dir_rerun(tmp_path):
+#     reference_db_path = tmp_path / _REFERENCE_DB_NAME
+#     create_db(reference_db_path, _DB_TEST_DB_DUMP)
+#     test_db_path = tmp_path / _TEST_DB_NAME
+#     create_db(test_db_path, DB_SCHEMA)
+#     test_storage_dir = tmp_path / "storage"
+#     copytree(TEST_DATA_DIR, test_storage_dir)
+#     with FileDatabaseUpdater(
+#             test_db_path, time.time(), 2, FsClient(test_storage_dir)) as new_file_db:
+#         new_file_db.update_dir(max_depth=None)
+#     with FileDatabaseUpdater(
+#             test_db_path, time.time() + 3600, 2, FsClient(test_storage_dir)) as new_file_db:
+#         new_file_db.update_dir(max_depth=None)
+#     dump_db(test_db_path, tmp_path / "test_update_dir_rerun.sql")
+#     compare_db_with_ignores(reference_db_path, test_db_path)
 
 
 def test_delete_dir(tmp_path):
@@ -55,3 +105,10 @@ def test_error_missing_setup(tmp_path: Path) -> None:
             db.clean_cur_dir(["foo.log", "bar.txt"], True)
         with pytest.raises(ValueError):
             db.clean_cur_dir(["foo", "bar"], False)
+
+def test_update_file_skip_symlink(tmp_path: Path) -> None:
+    with FileDatabaseUpdater(tmp_path / _TEST_DB_NAME, time.time(), 1, FsClient(str(TEST_DATA_DIR))) as db:
+        db._cur_dir_id = 5
+        db._cur_dir_path = "test_data/test_dir"
+        db.storage_client.cur_path = TEST_DATA_DIR / "media"
+        assert db.update_file("IMG_0013_link.JPG", 0, 0, 0, 0, 0, "") == (0, 0, 0)
