@@ -68,11 +68,10 @@ _FILE_DELETE = ("DELETE FROM `files` WHERE `ROWID` IN (?")
 
 _FS_FILE_SELECT = ("SELECT `fsrecords`.`ROWID`, `fsrecords`.`SHA1ReadDate`, "
                    "`fsrecords`.`FileDate`, `files`.`ROWID`, "
-                   "`files`.`FileSize`, `SHA1`"
+                   "`files`.`FileSize`, `SHA1`, `Name`"
                    " FROM `fsrecords` INNER JOIN `files`"
                    " ON `files`.`ROWID` = `fsrecords`.`FileId`"
-                   " WHERE `DiskId` = ? AND `ParentId` = ? AND `Name` = ?"
-                   " AND `FileId` IS NOT NULL")
+                   " WHERE `DiskId` = ? AND `ParentId` = ?")
 _FILE_ON_DISK_SELECT = ("SELECT `fsrecords`.`ROWID`, `fsrecords`.`SHA1ReadDate`, "
                         "`fsrecords`.`FileDate`, `ParentId`, "
                         "`files`.`FileSize`, `SHA1`"
@@ -357,8 +356,8 @@ class FileManagerDatabase(SQLite3connection):
         else:
             logging.warning(f"clean_cur_dir: too many names {len(names)}, skipping clean missing {'files' if is_files else 'dirs'} for dir_id {self._cur_dir_id}")
 
-    def get_db_file_info(self, file_name: str, connection: Connection | None = None) -> tuple[
-            int, float, float, int, int, str]:
+    def get_db_file_info(self) -> dict[str, tuple[
+            int, float, float, int, int, str]]:
         """Query if exists fsrecords/files details on file.
             Returned fields:
                 `fsrecords`.`ROWID`
@@ -368,11 +367,10 @@ class FileManagerDatabase(SQLite3connection):
                 `files`.`FileSize`
                 `files`.`SHA1`
         """
-        for row in self._exec_query(
-                _FS_FILE_SELECT, (self._disk_id, self._cur_dir_id, file_name),
-                commit=False, connection=connection):
-            return row[0], row[1], row[2], row[3], row[4], row[5]
-        return 0, 0, 0, 0, 0, ""
+        dir_files = {}
+        for row in self._exec_query(_FS_FILE_SELECT, (self._disk_id, self._cur_dir_id), commit=False):
+            dir_files[row[6]] = (row[0], row[1], row[2], row[3], row[4], row[5])
+        return dir_files
 
     def select_file_id(self, sha1: str, mtime: float, connection: Connection | None = None) -> int:
         """Selects file_id (files.ROWID) by SHA, updates mtime if needed."""
