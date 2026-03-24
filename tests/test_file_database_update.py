@@ -191,3 +191,58 @@ def test_update_file_db_insert_skip_on_error(tmp_path: Path, mocker) -> None:
         assert hashed_size == size
         assert file_size == size
         assert hash_time > 0
+
+
+def test_update_files_skip_empty(tmp_path: Path, mocker) -> None:
+    storage_client = file_utils.FsClient(str(TEST_DATA_DIR))
+    with FileDatabaseUpdater(tmp_path / _TEST_DB_NAME, time.time(), 1, storage_client) as db:
+        db._cur_dir_id = 5
+        db._cur_dir_path = "test_data/test_dir"
+        db.storage_client.cur_path = TEST_DATA_DIR / "media"
+        assert db.update_files([]) == (0, 0, 0)
+
+
+def test_update_files_empty_db(tmp_path: Path) -> None:
+    storage_client = file_utils.FsClient(str(TEST_DATA_DIR))
+    with FileDatabaseUpdater(tmp_path / _TEST_DB_NAME, time.time(), 1, storage_client) as db:
+        db._cur_dir_id = 5
+        db._cur_dir_path = "test_data/test_dir"
+        db.storage_client.cur_path = TEST_DATA_DIR / "media"
+        test_file = "IMG_0013.JPG"
+        _, _, file_size, _, _, _ = storage_client.read_file_info(test_file)
+        hashed_size, size, hash_time = db.update_files([test_file])
+        assert hashed_size == file_size
+        assert size == file_size
+        assert hash_time > 0
+
+
+def test_update_files_mock_db(tmp_path: Path, mocker) -> None:
+    storage_client = file_utils.FsClient(str(TEST_DATA_DIR))
+    storage_client.cur_path = TEST_DATA_DIR / "media"
+    test_file = "IMG_0013.JPG"
+    _, _, file_size, _, _, _ = storage_client.read_file_info(test_file)
+    mocker.patch("file_database.FileManagerDatabase.get_db_file_info", lambda _: {test_file: (6, 100, 100, 7, 1024, "abc")})
+    with FileDatabaseUpdater(tmp_path / _TEST_DB_NAME, time.time(), 1, storage_client) as db:
+        db._cur_dir_id = 5
+        db._cur_dir_path = "test_data/test_dir"
+        hashed_size, size, hash_time = db.update_files([test_file])
+        assert hashed_size == file_size
+        assert size == file_size
+        assert hash_time > 0
+
+
+def test_update_files_empty_db_threads(tmp_path: Path, mocker) -> None:
+    storage_client = file_utils.FsClient(str(TEST_DATA_DIR))
+    storage_client.cur_path = TEST_DATA_DIR / "media"
+    test_file = "IMG_0013.JPG"
+    _, _, file_size, _, _, _ = storage_client.read_file_info(test_file)
+    test_file2 = "IMG_0004.JPG"
+    _, _, file_size2, _, _, _ = storage_client.read_file_info(test_file2)
+    total_size = file_size + file_size2
+    with FileDatabaseUpdater(tmp_path / _TEST_DB_NAME, time.time(), 4, storage_client) as db:
+        db._cur_dir_id = 5
+        db._cur_dir_path = "test_data/test_dir"
+        hashed_size, size, hash_time = db.update_files([test_file, test_file2])
+        assert hashed_size == total_size
+        assert size == total_size
+        assert hash_time > 0
