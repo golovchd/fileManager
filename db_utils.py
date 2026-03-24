@@ -22,10 +22,10 @@ TABLE_COMPARE: dict[str, list[int]] = {
     "fsrecords": [4, 7],
 }
 
-_RETRY_COUNT = 10
-_RETRY_FIRST_DELAY = 1
+_RETRY_COUNT = 16
+_RETRY_FIRST_DELAY = 0.5
 _RETRY_RANDOM_DELAY = 0.2   # Ensure spread of retries for multi thread scenarios
-_RETRY_DELAY_EXP = 1.5
+_RETRY_DELAY_EXP = 1.3
 
 
 def create_db(db_path: Path, db_dumps: list[Path]) -> None:
