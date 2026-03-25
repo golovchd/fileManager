@@ -1,10 +1,13 @@
 # fileManager
 
-File manager tools to maintain files archive. Tool is using local sqlite3 DB (default database location is `/var/lib/file-manager/fileManager.db`), please specify database using param `--database` if you want to use other location.
+File manager tools to maintain files archive.
 
-## Required tools
+Tool is using local sqlite3 DB (default database location is `/var/lib/file-manager/fileManager.db`),
+please specify database using param `--database` if you want to use other location.
 
-Please install `uv` (e.g. `pip install uv`)
+## Dependencies
+
+Please install `uv` (e.g. `pip install uv`), it will handle python dependencies
 
 ## Commands
 
