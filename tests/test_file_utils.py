@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from hashlib import sha1
 from pathlib import Path
 
@@ -8,13 +7,14 @@ import pytest
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 TEST_DATA_DIR = SCRIPT_DIR.parent / "test_data"
-sys.path.append(str(SCRIPT_DIR.parent))
 
-from file_utils import (PARTSIZES_DEFAULTS, FsClient, calc_etag,  # noqa: E402
-                        check_etag, factor_of_1MB, generate_file_sha1,
-                        get_confirmation, get_full_dir_path, get_mount_path,
-                        get_path_disk_info, get_path_from_mount,
-                        get_possible_etags, read_file)
+from file_manager.file_utils import PARTSIZES_DEFAULTS  # noqa: E402
+from file_manager.file_utils import (FsClient, calc_etag, check_etag,
+                                     factor_of_1MB, generate_file_sha1,
+                                     get_confirmation, get_full_dir_path,
+                                     get_mount_path, get_path_disk_info,
+                                     get_path_from_mount, get_possible_etags,
+                                     read_file)
 
 
 def test_get_full_dir_path():
@@ -68,7 +68,7 @@ def test_get_path_from_mount(
         del dir_path
         return mount_path
 
-    mocker.patch("file_utils.get_mount_path", mock_get_mount_path)
+    mocker.patch("file_manager.file_utils.get_mount_path", mock_get_mount_path)
     assert get_path_from_mount(test_dir_path) == expected_result
 
 
@@ -244,7 +244,7 @@ def test_get_path_disk_info(
         ) -> None:
 
     mocker.patch("subprocess.check_output", lambda _: lsblk_info)
-    mocker.patch("file_utils.get_mount_path",
+    mocker.patch("file_manager.file_utils.get_mount_path",
                  lambda p: Path("/".join(str(p).split("/")[:4])))
     disk_info = get_path_disk_info(dir_path)
     assert disk_info["uuid"] == uuid
@@ -262,7 +262,7 @@ def test_get_path_disk_info(
     ]
 )
 def test_get_confirmation(mocker, reply_input: str, accepted_choices: list[str], result: bool) -> None:
-    mocker.patch('file_utils.input', lambda x: reply_input)
+    mocker.patch('file_manager.file_utils.input', lambda x: reply_input)
     assert get_confirmation("test", accepted_choices) == result
 
 

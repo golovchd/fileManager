@@ -12,7 +12,7 @@ from pathlib import Path
 from time import CLOCK_MONOTONIC, clock_gettime_ns
 from typing import Any
 
-from storage_client import StorageClient
+from file_manager.storage_client import StorageClient
 
 _IGNORED_DIRS = [".", "..", "$RECYCLE.BIN"]
 

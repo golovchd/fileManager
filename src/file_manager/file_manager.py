@@ -4,10 +4,11 @@ import argparse
 import logging
 from pathlib import Path
 
-from file_database import DEFAULT_DATABASE
-from file_manager_implementation import (SORT_OPTIONS, SORT_OPTIONS_UNIQUE,
-                                         FileUtils)
-from file_utils import check_etag, get_possible_etags
+from file_manager.file_database import DEFAULT_DATABASE
+from file_manager.file_manager_implementation import (SORT_OPTIONS,
+                                                      SORT_OPTIONS_UNIQUE,
+                                                      FileUtils)
+from file_manager.file_utils import check_etag, get_possible_etags
 
 
 def list_disks_command(file_db: FileUtils, args: argparse.Namespace) -> int:

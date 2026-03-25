@@ -8,7 +8,7 @@ from typing import Any, Callable
 import boto3
 from botocore.exceptions import ClientError
 
-from storage_client import StorageClient
+from file_manager.storage_client import StorageClient
 
 _CLIENT_RETRY_TIMEOUT = 30  # seconds
 

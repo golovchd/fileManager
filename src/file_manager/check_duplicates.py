@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 """Search duplicate files in database."""
+from __future__ import annotations
 
 import argparse
 import logging
@@ -8,14 +9,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from sqlite3 import OperationalError
 from time import CLOCK_MONOTONIC, clock_gettime_ns
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
-from duplicates_cleanup import (ALLOWED_ACTIONS, LEFT_DIR_KEEP_ACTION,
-                                RIGHT_DIR_KEEP_ACTION, SKIP_ACTION,
-                                DuplicatesCleanup)
-from file_database import DEFAULT_DATABASE, FileManagerDatabase
-from file_utils import generate_file_sha1
-from utils import print_table
+from file_manager.duplicates_cleanup import (ALLOWED_ACTIONS,
+                                             LEFT_DIR_KEEP_ACTION,
+                                             RIGHT_DIR_KEEP_ACTION,
+                                             SKIP_ACTION, DuplicatesCleanup)
+from file_manager.file_database import DEFAULT_DATABASE, FileManagerDatabase
+from file_manager.file_utils import generate_file_sha1
+from file_manager.utils import print_table
 
 DEFAULT_MIN_SIZE = 1000000  # 1 MB
 DEFAULT_MIN_COMMON_MB = 20  # 20 MB
@@ -80,10 +82,10 @@ class FSRecortInfo:
 
 @dataclass
 class DirsDifference:
-    files_a_not_b: Dict[int, int]
-    files_b_not_a: Dict[int, int]
+    files_a_not_b: dict[int, int]
+    files_b_not_a: dict[int, int]
     matching_size: float
-    common_files: Dict[int, int]
+    common_files: dict[int, int]
 
 
 class FileDuplicates(FileManagerDatabase):
@@ -97,13 +99,13 @@ class FileDuplicates(FileManagerDatabase):
         super().__init__(db_path, 0)
         self._min_size = min_size
         self.compare_count = 0
-        self.checked_dirs: Dict[DirsPair, bool] = {}
-        self.duplicate_dirs: Dict[DirsPair, DirsDifference] = {}
-        self.file_info: Dict[int, FileInfo] = {}
-        self.fsrecord_info: Dict[int, FSRecortInfo] = {}
-        self.dir_fsrecords: Dict[int, List[int]] = {}
+        self.checked_dirs: dict[DirsPair, bool] = {}
+        self.duplicate_dirs: dict[DirsPair, DirsDifference] = {}
+        self.file_info: dict[int, FileInfo] = {}
+        self.fsrecord_info: dict[int, FSRecortInfo] = {}
+        self.dir_fsrecords: dict[int, list[int]] = {}
         self.rehash = rehash
-        self.checked_hashes: Dict[int, str] = {}
+        self.checked_hashes: dict[int, str] = {}
         self.cleanup_config = cleanup_config
         self.cleanup = cleanup
         self.dry_run = dry_run
@@ -130,7 +132,7 @@ class FileDuplicates(FileManagerDatabase):
             f"{mcps} CPS, {tcps} TCPS")
 
     def mark_as_checked(
-            self, dir_a: int, dir_b: int, match: bool, profile: List[Any]
+            self, dir_a: int, dir_b: int, match: bool, profile: list[Any]
             ) -> bool:
         self.checked_dirs[DirsPair(dir_a, dir_b)] = match
         self.checked_dirs[DirsPair(dir_b, dir_a)] = match
@@ -139,10 +141,10 @@ class FileDuplicates(FileManagerDatabase):
 
     def query_files(
             self, dir_a: int, dir_b: int
-            ) -> Tuple[Dict[int, int], Dict[int, int]]:
+            ) -> tuple[dict[int, int], dict[int, int]]:
         """Queries files of given pair of dirs."""
-        a_file_size: Dict[int, int] = {}
-        b_file_size: Dict[int, int] = {}
+        a_file_size: dict[int, int] = {}
+        b_file_size: dict[int, int] = {}
         self.dir_fsrecords[dir_a] = []
         self.dir_fsrecords[dir_b] = []
 
@@ -205,9 +207,9 @@ class FileDuplicates(FileManagerDatabase):
                 [start_time, query_time, size_time, dirs_files_matches_time,
                  end_time, 1, len(a_file_size), len(b_file_size)])
 
-        a_not_b_size: Dict[int, int] = {
+        a_not_b_size: dict[int, int] = {
             a: a_file_size[a] for a in a_file_size if a not in b_file_size}
-        b_not_a_size: Dict[int, int] = {
+        b_not_a_size: dict[int, int] = {
             b: b_file_size[b] for b in b_file_size if b not in a_file_size}
         diff_count = len(a_not_b_size) + len(b_not_a_size)
 
@@ -337,7 +339,7 @@ class FileDuplicates(FileManagerDatabase):
               f"{reclaimed_size}B was reclaimed" if self.cleanup else "")
 
     def in_folder_cleanup_action(
-            self, fsrecord_id_list: List[str], default_idx: int) -> int:
+            self, fsrecord_id_list: list[str], default_idx: int) -> int:
         keep_idx = -1
         duplicates_count = len(fsrecord_id_list)
         keep_idx = default_idx if self.auto_execute_default else -1
@@ -360,7 +362,7 @@ class FileDuplicates(FileManagerDatabase):
         if not (file_path.exists() and self.check_hash(keep_fsrecord_id)):
             raise ValueError(
                 f"Selected to keep {file_path} is missing/different on disk.")
-        delete_list: List[int] = []
+        delete_list: list[int] = []
         for idx in range(duplicates_count):
             if idx + 1 == keep_idx:
                 continue
@@ -372,7 +374,7 @@ class FileDuplicates(FileManagerDatabase):
         dir_b_path = self.get_path(pair.DirBId)
         print(f"Matching files in {dir_a_path} and {dir_b_path}:")
         compare_table = []
-        common_files: Dict[int, DirsPair] = {}
+        common_files: dict[int, DirsPair] = {}
         # compare_table.extend(self.get_dir_only(pair, pair.DirAId))
         for fs_record_a_id in self.dir_fsrecords[pair.DirAId]:
             fsrecord_info = self.fsrecord_info[fs_record_a_id]
@@ -402,7 +404,7 @@ class FileDuplicates(FileManagerDatabase):
             dir_a_path, dir_b_path)
         return self.dirs_cleanup_action(common_files, default_action)
 
-    def get_dir_only(self, pair: DirsPair, dir_id: int) -> List[List[str]]:
+    def get_dir_only(self, pair: DirsPair, dir_id: int) -> list[list[str]]:
         """Processing pair to extract files only in given."""
         compare_table = []
         for fs_record_id in self.dir_fsrecords[dir_id]:
@@ -418,7 +420,7 @@ class FileDuplicates(FileManagerDatabase):
                 ])
         return compare_table
 
-    def dirs_cleanup_action(self, common_files: Dict[int, DirsPair],
+    def dirs_cleanup_action(self, common_files: dict[int, DirsPair],
                             default_action: str) -> int:
         action = default_action if self.auto_execute_default else ""
         print(
@@ -462,7 +464,7 @@ class FileDuplicates(FileManagerDatabase):
                 remove_list.append(delete_id)
         return self.delete_files(remove_list)
 
-    def delete_files(self, fsrecord_id_list: List[int]) -> int:
+    def delete_files(self, fsrecord_id_list: list[int]) -> int:
         """Returns size of reclamed space."""
         deleted_size = 0
         for id in fsrecord_id_list:
@@ -506,7 +508,7 @@ class FileDuplicates(FileManagerDatabase):
         return True
 
 
-def main(argv):
+def main(argv: Any = None) -> None:
     """Module as util use wrapper."""
     arg_parser = argparse.ArgumentParser(
         description="Search for duplicate files and folders.")
@@ -551,7 +553,7 @@ def main(argv):
     arg_parser.add_argument("-v", "--verbose",
                             help="Print verbose output",
                             action="count", default=0)
-    args = arg_parser.parse_args(argv[1:])
+    args = arg_parser.parse_args(argv[1:] if argv else sys.argv[1:])
     logging.basicConfig(
         format="%(asctime)s [%(levelname)s] %(message)s",
         level=logging.WARNING - 10 * (args.verbose if args.verbose < 3 else 2))
@@ -569,4 +571,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    main(sys.argv)
+    main()

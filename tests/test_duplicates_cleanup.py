@@ -1,17 +1,15 @@
 import logging
-import sys
 from pathlib import Path
 from typing import Dict
 
 import pytest
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-sys.path.append(str(SCRIPT_DIR.parent))
+from file_manager.duplicates_cleanup import (DIR_CLEANUP_RULES,
+                                             LEFT_DIR_KEEP_ACTION,
+                                             RIGHT_DIR_KEEP_ACTION,
+                                             SKIP_ACTION, DuplicatesCleanup)
 
-from duplicates_cleanup import DIR_CLEANUP_RULES  # noqa: E402
-from duplicates_cleanup import LEFT_DIR_KEEP_ACTION  # noqa: E402
-from duplicates_cleanup import RIGHT_DIR_KEEP_ACTION  # noqa: E402
-from duplicates_cleanup import SKIP_ACTION, DuplicatesCleanup  # noqa: E402
+SCRIPT_DIR = Path(__file__).resolve().parent
 
 TEST_CONFIG = SCRIPT_DIR.parent / "duplicates_cleanup.yaml"
 

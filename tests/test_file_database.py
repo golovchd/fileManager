@@ -1,18 +1,17 @@
 from __future__ import annotations
 
 import sqlite3
-import sys
 import time
+from io import StringIO
 from pathlib import Path
 
 import pytest
 
+from file_manager.db_utils import TABLE_SELECT, create_db
+from file_manager.file_database import FileManagerDatabase
+
 SCRIPT_DIR = Path(__file__).resolve().parent
 TEST_DATA_DB_DIR = SCRIPT_DIR.parent / "test_db"
-sys.path.append(str(SCRIPT_DIR.parent))
-
-from db_utils import TABLE_SELECT, create_db  # noqa: E402
-from file_database import FileManagerDatabase  # noqa: E402
 
 _DB_TEST_DB_DUMP = [TEST_DATA_DB_DIR / "fileManager_test_dump.sql"]
 _DB_TEST_DB_1 = [TEST_DATA_DB_DIR / "fileManager_test_1.sql"]
@@ -30,7 +29,7 @@ def test_set_disk_change(tmp_path: Path, mocker) -> None:
         yield [5, "abc", 500, "test-label"]
 
     mocker.patch(
-        "file_database.FileManagerDatabase._exec_query", mock_exec_query)
+        "file_manager.file_database.FileManagerDatabase._exec_query", mock_exec_query)
 
     with FileManagerDatabase(tmp_path / _TEST_DB_NAME, time.time()) as db:
         db.set_disk("abc", 500, "test-label")
@@ -208,16 +207,16 @@ def test_get_path_on_disk(tmp_path: Path, path: str, dir_id: int) -> None:
         ("61BB-02E2", False, 3),
     ]
 )
-def test_delete_disk_errors(tmp_path: Path, mocker, disk_name: str, confirm: bool, result: int) -> None:
-    mocker.patch('file_database.file_utils.get_confirmation', lambda x,y: confirm)
+def test_delete_disk_errors(tmp_path: Path, monkeypatch, disk_name: str, confirm: bool, result: int) -> None:
+    monkeypatch.setattr('sys.stdin', StringIO('delete' if confirm else 'cancel'))
     reference_db_path = tmp_path / _TEST_DB_NAME
     create_db(reference_db_path, _DB_TEST_DB_1)
     with FileManagerDatabase(reference_db_path, time.time()) as db:
         assert db.delete_disk(disk_name, False, False) == result
 
 
-def test_delete_disk_force(tmp_path: Path, mocker) -> None:
-    mocker.patch('file_database.file_utils.get_confirmation', lambda x,y: False)
+def test_delete_disk_force(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr('sys.stdin', StringIO('simulated input'))
     reference_db_path = tmp_path / _TEST_DB_NAME
     create_db(reference_db_path, _DB_TEST_DB_1)
     with FileManagerDatabase(reference_db_path, time.time()) as db:

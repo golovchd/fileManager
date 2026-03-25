@@ -7,7 +7,7 @@ from pathlib import Path
 from time import sleep
 from typing import Sequence
 
-SCRIPT_DIR = Path(__file__).resolve().parent
+SCRIPT_DIR = Path(__file__).resolve().parents[2]
 DB_SCHEMA_DIR = SCRIPT_DIR / "db_schema"
 DB_SCHEMA = [
     DB_SCHEMA_DIR / "fileManager_schema.sql",

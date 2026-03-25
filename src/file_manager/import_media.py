@@ -10,7 +10,7 @@ from pathlib import Path
 
 import exifread
 
-from utils import float2timestamp, timeobj2exif_str
+from file_manager.utils import float2timestamp, timeobj2exif_str
 
 _COMPARE_TIME_DIFF = timedelta(2)  # 2 days
 

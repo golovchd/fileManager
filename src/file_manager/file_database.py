@@ -8,9 +8,9 @@ from pathlib import Path
 from sqlite3 import Connection
 from time import time
 
-import file_utils
-from db_utils import SQLite3connection
-from utils import timestamp2exif_str
+from file_manager.db_utils import SQLite3connection
+from file_manager.file_utils import get_confirmation, get_disk_info
+from file_manager.utils import timestamp2exif_str
 
 DEFAULT_DATABASE = Path("/var/lib/file-manager/fileManager.db")
 _DISK_SIZE_DIFF_LIMIT = 0.005
@@ -121,7 +121,7 @@ class FileManagerDatabase(SQLite3connection):
     def set_mountpoint(self):
         """Request lsblk disk info, raises ValueError if not mounted."""
         self.mountpoint = Path(
-                file_utils.get_disk_info(self._disk_uuid)["mountpoint"])
+                get_disk_info(self._disk_uuid)["mountpoint"])
 
     def _save_path_cache(self, path_id: int, path: str, disk_id: int=0) -> None:
         """Updates id and path caches."""
@@ -430,7 +430,7 @@ class FileManagerDatabase(SQLite3connection):
             logging.error(f"Disk param {disk} returns more than one disk with UUIDs {','.join(disk_ids.values())} from database")
             return 2
         for disk_id, disk_uuid in disk_ids.items():
-            if not force and not file_utils.get_confirmation(f"Please confirm delete from DB disk {disk} with UUID {disk_uuid}. Type 'delete': ", ['delete']):
+            if not force and not get_confirmation(f"Please confirm delete from DB disk {disk} with UUID {disk_uuid}. Type 'delete': ", ['delete']):
                 logging.warning(f"Did not get confirmation for disk {disk} deletion, exiting")
                 return 3
             logging.info(f"Deleting file records associated with disk {disk}, UUID {disk_uuid}, DiskId {disk_id}...")

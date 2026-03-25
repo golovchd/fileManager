@@ -7,8 +7,8 @@ from pathlib import Path
 from sqlite3 import IntegrityError
 from time import CLOCK_MONOTONIC, clock_gettime_ns
 
-from file_database import FileManagerDatabase
-from storage_client import StorageClient
+from file_manager.file_database import FileManagerDatabase
+from file_manager.storage_client import StorageClient
 
 _MAX_ORFAN_SEARCH_DEPTH = 256
 _FILE_INSERT_RETRY_COUNT = 2
