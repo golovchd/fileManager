@@ -17,3 +17,10 @@ Run commands below using `uv` (`uv run <command nmame>`), use `-h`/`--help` to g
 - `file-manager` - Analysis of database content
 - `check-duplicates` - Search and removal of duplicated files on specific disk
 - `import-media` - Import media files to storage location. Prototype, work in progress
+
+## Using S3 backend
+
+You could use S3 URL (`s3://bucket/path`) as media location for `update-database` command.
+Please make sure that you have valid AWS credentials (e.g. in in `~/.aws/credentials`) to access bucket before running `update-database` command.
+
+S3 buckets stored in database as disk UUID/Labels. Specify only bucket name as `DISK` param for file-manager\` command
