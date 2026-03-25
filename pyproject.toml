@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling>=1.12.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "file_manager"
+version = "0.1.0"
+description = "Managing files across multiple storages"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICEN[CS]E.*"]
+requires-python = ">=3.9,<4"
+dependencies = [
+    "ExifRead==3.5.1",
+    "PyYAML==6.0.3",
+    "boto3>=1.42.66",
+]
+
+[project.scripts]
+update-database = "file_manager.update_database:main"
+file-manager = "file_manager.file_manager:main"
+check-duplicates = "file_manager.check_duplicates:main"
+import-media = "file_manager.import_media:main"
+
+[tool.hatch.build]
+dev-mode-dirs = ["src"]
+packages = ["src/file_manager"]
+only-include = ["src/file_manager"]
+
+[tool.hatch.metadata]
+package-dir = "src"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.5",
+    "pytest-cov>=4.0.0",
+    "pyfakefs>=5.9.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+minversion = "8.3"
+addopts = ["--cov", "-v", "--cov-report=xml", "--cov-report=term-missing"]
+testpaths = [
+    "tests"
+]

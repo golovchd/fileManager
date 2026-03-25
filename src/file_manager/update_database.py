@@ -1,22 +1,25 @@
 #!/usr/bin/python3
 """Load files to database."""
 
+from __future__ import annotations
+
 import argparse
 import logging
 import os
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
-from file_database import DEFAULT_DATABASE
-from file_database_update import FileDatabaseUpdater
-from storage_interface import get_storage_client
+from file_manager.file_database import DEFAULT_DATABASE
+from file_manager.file_database_update import FileDatabaseUpdater
+from file_manager.storage_interface import get_storage_client
 
 REHASH_INTERVAL = 180  # Number of days before re-hash file if not changed
 DEFAULT_MAX_FILE_UPDATE_THREADS = 4
 
 
-def main(argv):
+def main(argv: Any=[]) -> None:
     """Module as util use wrapper."""
     arg_parser = argparse.ArgumentParser(
         description="Load files to database")
@@ -40,7 +43,8 @@ def main(argv):
         help="Database file",
         required=False,
         default=DEFAULT_DATABASE)
-    default_threads = os.cpu_count() // 4 if os.cpu_count() else DEFAULT_MAX_FILE_UPDATE_THREADS
+    os_cpu_count = os.cpu_count()
+    default_threads = os_cpu_count // 4 if os_cpu_count else DEFAULT_MAX_FILE_UPDATE_THREADS
     arg_parser.add_argument("-t", "--threads",
                             help=f"Run file reading/hashing in multiple threads, specify number of threads or use -t without value to use default 1/4 of CPU cores ({default_threads})",
                             type=int, nargs="?", const=default_threads, default=1)
@@ -50,7 +54,7 @@ def main(argv):
     arg_parser.add_argument("-c", "--clear-orfan-files",
                             help="Clear orfan file records",
                             action="store_true", default=False)
-    args = arg_parser.parse_args(argv[1:])
+    args = arg_parser.parse_args(argv[1:] if argv else sys.argv[1:])
     logging.basicConfig(
         format="%(asctime)s [%(levelname)s] %(message)s",
         level=logging.WARNING - 10 * (args.verbose if args.verbose < 3 else 2))
@@ -63,4 +67,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    main(sys.argv)
+    main()

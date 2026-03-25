@@ -1,9 +1,11 @@
-from typing import Callable, List, Optional
+from __future__ import annotations
+
+from typing import Callable
 from unittest.mock import call, patch
 
 import pytest
 
-from utils import print_table, timestamp2exif_str
+from file_manager.utils import print_table, timestamp2exif_str
 
 
 @pytest.mark.parametrize(
@@ -64,14 +66,14 @@ from utils import print_table, timestamp2exif_str
 @patch('builtins.print')
 def test_print_table(
         mock_print,
-        data: List[List[str]],
-        headers: List[str],
-        indexes: Optional[List[int]],
-        formats: Optional[List[Callable]],
-        aligns: Optional[List[str]],
+        data: list[list[str]],
+        headers: list[str],
+        indexes: list[int] | None,
+        formats: list[Callable] | None,
+        aligns: list[str] | None,
         separator: str,
         space: str,
-        printout: List[object]
+        printout: list[object]
         ) -> None:
     print_table(data, headers, indexes=indexes, formats=formats,
                 aligns=aligns, separator=separator, space=space)

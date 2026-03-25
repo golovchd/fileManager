@@ -6,9 +6,9 @@ from pathlib import Path
 from shutil import move
 from typing import Any, Callable
 
-from file_database import FileManagerDatabase
-from file_utils import get_disk_info
-from utils import print_table, timestamp2exif_str
+from file_manager.file_database import FileManagerDatabase
+from file_manager.file_utils import get_disk_info
+from file_manager.utils import print_table, timestamp2exif_str
 
 SORT_OPTIONS = ["id", "uuid", "label", "file-count", "object-count", "disk-size", "files-size", "usage"]
 SORT_OPTIONS_UNIQUE = ["id", "uuid", "label", "disk-size", "files-size", "unique-size", "usage", "unique-usage", "unique-percent"]
