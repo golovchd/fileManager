@@ -14,9 +14,17 @@ _TEST_DB_NAME = "test.db"
 
 
 def test_lazy_db_setup(tmp_path: Path):
-    assert not (tmp_path / _TEST_DB_NAME).exists()
-    SQLite3connection(tmp_path / _TEST_DB_NAME)
-    assert (tmp_path / _TEST_DB_NAME).exists()
+    db_path = tmp_path / _TEST_DB_NAME
+    assert not db_path.exists()
+    SQLite3connection(db_path)
+    assert db_path.exists()
+
+def test_lazy_db_dir_setup(tmp_path: Path):
+    db_path = tmp_path / "subdir" / _TEST_DB_NAME
+    assert not db_path.parent.exists()
+    assert not db_path.exists()
+    SQLite3connection(db_path)
+    assert db_path.exists()
 
 def test_create_db(tmp_path: Path):
     create_db_path = tmp_path / _TEST_DB_NAME
