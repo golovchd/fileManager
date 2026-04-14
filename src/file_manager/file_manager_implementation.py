@@ -1,17 +1,17 @@
+from __future__ import annotations
+
 import logging
 import re
 from pathlib import Path
 from shutil import move
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable
 
-from file_database import FileManagerDatabase
-from file_utils import get_disk_info
-from utils import print_table, timestamp2exif_str
+from file_manager.file_database import FileManagerDatabase
+from file_manager.file_utils import get_disk_info
+from file_manager.utils import print_table, timestamp2exif_str
 
-SORT_OPTIONS = ["id", "uuid", "label", "disk-size", "files-size", "usage"]
-SORT_OPTIONS_UNIQUE = SORT_OPTIONS[:]
-SORT_OPTIONS_UNIQUE.insert(5, "unique-size")
-SORT_OPTIONS_UNIQUE += ["unique-usage", "unique-percent"]
+SORT_OPTIONS = ["id", "uuid", "label", "file-count", "object-count", "disk-size", "files-size", "usage"]
+SORT_OPTIONS_UNIQUE = ["id", "uuid", "label", "disk-size", "files-size", "unique-size", "usage", "unique-usage", "unique-percent"]
 
 _BACKUP_COUNT = ("SELECT `fsrecords`.*, `files`.* FROM ("
                  "  SELECT * FROM ("
@@ -27,7 +27,10 @@ _BACKUP_COUNT = ("SELECT `fsrecords`.*, `files`.* FROM ("
                  "WHERE `DiskId` = ? {}")
 _DISKS_SELECT = "SELECT `ROWID`, `UUID`, `Label`, `DiskSize`/1024 FROM `disks`"
 _DISK_SELECT_SIZE = ("SELECT `disks`.`ROWID`, `UUID`, `Label`, "
-                     "`DiskSize`/1024, SUM(`FileSize`)/1048576 FROM `disks`"
+                     "COUNT(DISTINCT `FileId`) AS `FilesCount`, "
+                     "COUNT(DISTINCT `fsrecords`.ROWID) AS `ObjectCount`, "
+                     "`DiskSize`/1024 AS `DiskSizeMiB`, SUM(`FileSize`)/1048576 AS `FilesSizeMiB` "
+                     "FROM `disks` "
                      "INNER JOIN `fsrecords` ON `DiskId` = `disks`.`ROWID` "
                      "INNER JOIN `files` ON `files`.`ROWID` = `FileId` "
                      "WHERE `disks`.`ROWID` IN ({})"
@@ -79,7 +82,7 @@ class FileUtils(FileManagerDatabase):
             self, filter: str,
             size_query: str = _DISK_SELECT_SIZE,
             cal_size: bool = False,
-            id_list: Tuple[int, ...] = ()) -> List[List[str]]:
+            id_list: tuple[int, ...] = ()) -> list[list[str]]:
         query = (size_query.format("?" + ",?" * (len(id_list) - 1))
                  if cal_size else _DISKS_SELECT)
         disks = []
@@ -89,7 +92,7 @@ class FileUtils(FileManagerDatabase):
                 continue
             row = list(row)
             if cal_size:
-                row.append(round(100 * row[-1] / row[-2], 2))
+                row.append(round(100 * row[-1] / row[-2], 2) if row[-2] else "N/A")
             disks.append(row)
         return disks
 
@@ -112,7 +115,7 @@ class FileUtils(FileManagerDatabase):
                 self.get_path(row[1]), row[0], row[7], row[3], row[8]])
         headers = [f"Path on disk {self._disk_label}",
                    "Name", "File Size, B", "File Date", "File SHA1"]
-        formats: List[Callable] = [
+        formats: list[Callable] = [
             str,
             str,
             str,
@@ -133,14 +136,13 @@ class FileUtils(FileManagerDatabase):
             print_table(disks_list, headers)
             return
 
-        headers.extend(["FilesSize, MiB", "Usage, %"])
+        headers = ["DiskID", "UUID", "Label", "FilesCount", "ObjectCount", "DiskSize, MiB", "FilesSize, MiB", "Usage, %"]
         id_list = tuple(int(disk[0]) for disk in disks_list)
         disk_usage = self.query_disks("", cal_size=True, id_list=id_list)
         sort_idx = SORT_OPTIONS.index(sort_by)
         if sort_idx >= len(disk_usage[0]):
             sort_idx = 0
-        print_table(sorted(disk_usage, key=lambda info: info[sort_idx]),
-                    headers)
+        print_table(sorted(disk_usage, key=lambda info: info[sort_idx]), headers)
 
     def update_disk(self, filter: str) -> None:
         disks_list = self.query_disks(filter)
@@ -165,7 +167,7 @@ class FileUtils(FileManagerDatabase):
             "", size_query=_UNIQUE_FILES_SIZE_DISKS,
             cal_size=True, id_list=id_list)
         for index in range(len(unique_files)):
-            unique_files[index].insert(4, disk_usage[index][4])
+            unique_files[index].insert(4, disk_usage[index][-2])
             unique_files[index].insert(-1, disk_usage[index][-1])
             unique_files[index].append(str(round(
                 100 * int(unique_files[index][5]) /
@@ -215,7 +217,7 @@ class FileUtils(FileManagerDatabase):
     def list_dir(
                 self, disk: str, dir_path: str, recursive: bool,
                 summary: bool = False, only_count: bool = False, print_sha: bool = False
-            ) -> Tuple[int, int, int]:
+            ) -> tuple[int, int, int]:
         self.set_disk_by_name(disk)
         self._cur_dir_id = self.get_dir_id(
             dir_path.split("/"), insert_dirs=False)
@@ -386,7 +388,7 @@ class FileUtils(FileManagerDatabase):
         print_find_results(matching_list, print_sha)
         return 0
 
-    def get_unique_files(self, disk: str, dir_ids: list[int], disk_index: int, exclude_path: list[str]) -> Tuple[int, int, int, int]:
+    def get_unique_files(self, disk: str, dir_ids: list[int], disk_index: int, exclude_path: list[str]) -> tuple[int, int, int, int]:
         """Generates dictionary self._baseline_file_disks of unique files under provided dir_id
             Returned elements:
             - Number of unique files under dir_ids on current disk
@@ -398,7 +400,7 @@ class FileUtils(FileManagerDatabase):
         if not disk_index:
             # Dict of file_id and list of disks that have it
             logging.debug("Inited self._baseline_file_disks")
-            self._baseline_file_disks: Dict[str, List[str]] = {}
+            self._baseline_file_disks: dict[str, list[str]] = {}
         logging.debug(
             f"Collecting unique files from disk {self.disk_name} dir_id={dir_ids}, disk_index={disk_index}")
         files_count = 0
@@ -443,7 +445,7 @@ class FileUtils(FileManagerDatabase):
             logging.info(f"Disk {disk} under {','.join(path_list)} have {new_files_count} new unique files, size {new_files_size}")
         return (files_count, dir_size, new_files_count, new_files_size)
 
-    def path_redundancy(self, disks: List[str], paths: List[str], exclude_path: list[str], files_count_limit: int=1) -> None:
+    def path_redundancy(self, disks: list[str], paths: list[str], exclude_path: list[str], files_count_limit: int=1) -> None:
         path_id = { disk: [self.get_path_on_disk(disk, path) for path in paths if self.get_path_on_disk(disk, path)] for disk in disks}
         logging.info(f"Calculating redundancy of {','.join(paths)} on disks {','.join(path_id.keys())}")
         logging.debug(path_id)
@@ -496,7 +498,7 @@ class FileUtils(FileManagerDatabase):
                       f"{dst_path.parent}")
         logging.debug(f"Moving dir {src_path} to {dst_path}")
 
-        if not dry_run and move(src_path, dst_path) == dst_path:
+        if not dry_run and move(str(src_path), str(dst_path)) == dst_path:
             self._exec_query(
                     _MOVE_FS_RECORD, (dst_parent_id, dst_path.name, object_id),
                     commit=True)
@@ -512,7 +514,7 @@ def print_dir_content(dir_path: str, dir_content: list[tuple[int, str, float, fl
     if print_sha:
         headers.append("SHA1")
     indexes = [1, 5, 2, 3, 6]
-    formats: List[Callable] = [
+    formats: list[Callable] = [
         str,
         lambda x: str(x) if x else "dir",
         timestamp2exif_str,
@@ -531,7 +533,7 @@ def print_find_results(find_results: list[list[Any]], print_sha: bool) -> None:
     if print_sha:
         headers.append("SHA1")
     indexes = [1, 9, 10, 5, 2, 3, 6]
-    formats: List[Callable] = [
+    formats: list[Callable] = [
         str,
         str,
         str,

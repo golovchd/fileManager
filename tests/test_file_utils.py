@@ -1,18 +1,20 @@
-import sys
+from __future__ import annotations
+
 from hashlib import sha1
 from pathlib import Path
-from typing import List
 
 import pytest
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 TEST_DATA_DIR = SCRIPT_DIR.parent / "test_data"
-sys.path.append(str(SCRIPT_DIR.parent))
 
-from file_utils import (convert_to_bytes, generate_file_sha1,  # noqa: E402
-                        get_confirmation, get_full_dir_path, get_mount_path,
-                        get_path_disk_info, get_path_from_mount, read_dir,
-                        read_file)
+from file_manager.file_utils import PARTSIZES_DEFAULTS  # noqa: E402
+from file_manager.file_utils import (FsClient, calc_etag, check_etag,
+                                     convert_to_bytes, factor_of_1MB,
+                                     generate_file_sha1, get_confirmation,
+                                     get_full_dir_path, get_mount_path,
+                                     get_path_disk_info, get_path_from_mount,
+                                     get_possible_etags, read_dir, read_file)
 
 
 @pytest.mark.parametrize(
@@ -92,11 +94,11 @@ def test_get_mount_path():
 )
 def test_get_path_from_mount(
         mocker, test_dir_path, mount_path, expected_result):
-    def mock_get_mount_path(dir_path: Path) -> List[str]:
+    def mock_get_mount_path(dir_path: Path) -> list[str]:
         del dir_path
         return mount_path
 
-    mocker.patch("file_utils.get_mount_path", mock_get_mount_path)
+    mocker.patch("file_manager.file_utils.get_mount_path", mock_get_mount_path)
     assert get_path_from_mount(test_dir_path) == expected_result
 
 
@@ -134,7 +136,8 @@ def test_get_path_from_mount_real_path():
     ],
 )
 def test_read_dir(test_path, expected_files, expected_dirs):
-    files, sub_dirs = read_dir(SCRIPT_DIR.parent / test_path)
+    sc = FsClient(str(SCRIPT_DIR.parent / test_path))
+    files, sub_dirs = sc.read_dir()
     assert sorted(files) == sorted(expected_files)
     assert sorted(sub_dirs) == sorted(expected_dirs)
 
@@ -271,7 +274,7 @@ def test_get_path_disk_info(
         ) -> None:
 
     mocker.patch("subprocess.check_output", lambda _: lsblk_info)
-    mocker.patch("file_utils.get_mount_path",
+    mocker.patch("file_manager.file_utils.get_mount_path",
                  lambda p: Path("/".join(str(p).split("/")[:4])))
     disk_info = get_path_disk_info(dir_path)
     assert disk_info["uuid"] == uuid
@@ -289,5 +292,5 @@ def test_get_path_disk_info(
     ]
 )
 def test_get_confirmation(mocker, reply_input: str, accepted_choices: list[str], result: bool) -> None:
-    mocker.patch('file_utils.input', lambda x: reply_input)
+    mocker.patch('file_manager.file_utils.input', lambda x: reply_input)
     assert get_confirmation("test", accepted_choices) == result

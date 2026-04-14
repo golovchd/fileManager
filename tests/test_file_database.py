@@ -1,20 +1,20 @@
+from __future__ import annotations
+
 import sqlite3
-import sys
 import time
+from io import StringIO
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import pytest
 
+from file_manager.db_utils import TABLE_SELECT, create_db
+from file_manager.file_database import FileManagerDatabase
+
 SCRIPT_DIR = Path(__file__).resolve().parent
-TEST_DATA_DIR = SCRIPT_DIR.parent / "test_data"
-sys.path.append(str(SCRIPT_DIR.parent))
+TEST_DATA_DB_DIR = SCRIPT_DIR.parent / "test_db"
 
-from db_utils import TABLE_SELECT, create_db  # noqa: E402
-from file_database import FileManagerDatabase  # noqa: E402
-
-_DB_TEST_DB_DUMP = SCRIPT_DIR.parent / "fileManager_test_dump.sql"
-_DB_TEST_DB_1 = SCRIPT_DIR.parent / "fileManager_test_1.sql"
+_DB_TEST_DB_DUMP = [TEST_DATA_DB_DIR / "fileManager_test_dump.sql"]
+_DB_TEST_DB_1 = [TEST_DATA_DB_DIR / "fileManager_test_1.sql"]
 _TEST_DB_NAME = "test.db"
 
 
@@ -25,11 +25,11 @@ def test_error_exec_sql(tmp_path: Path) -> None:
 
 
 def test_set_disk_change(tmp_path: Path, mocker) -> None:
-    def mock_exec_query(self, sql: str, params: Tuple, commit=True):
+    def mock_exec_query(self, sql: str, params: tuple, commit=True):
         yield [5, "abc", 500, "test-label"]
 
     mocker.patch(
-        "file_database.FileManagerDatabase._exec_query", mock_exec_query)
+        "file_manager.file_database.FileManagerDatabase._exec_query", mock_exec_query)
 
     with FileManagerDatabase(tmp_path / _TEST_DB_NAME, time.time()) as db:
         db.set_disk("abc", 500, "test-label")
@@ -112,7 +112,7 @@ def test_set_disk_change(tmp_path: Path, mocker) -> None:
 )
 def test_get_path(
         tmp_path: Path, fsrecord_id: int, fsrecord_path: str,
-        dir_cache: Dict[int, str], id_cache: Dict[str, int]) -> None:
+        dir_cache: dict[int, str], id_cache: dict[str, int]) -> None:
     reference_db_path = tmp_path / _TEST_DB_NAME
     create_db(reference_db_path, _DB_TEST_DB_DUMP)
     with FileManagerDatabase(reference_db_path, time.time()) as db:
@@ -131,7 +131,7 @@ def test_get_path(
     ]
 )
 def test_query_subdirs(
-        tmp_path: Path, dir: int, recursive: bool, subdirs: List[int]) -> None:
+        tmp_path: Path, dir: int, recursive: bool, subdirs: list[int]) -> None:
     reference_db_path = tmp_path / _TEST_DB_NAME
     create_db(reference_db_path, _DB_TEST_DB_DUMP)
     with FileManagerDatabase(reference_db_path, time.time()) as db:
@@ -151,7 +151,7 @@ def test_query_subdirs(
         ([], ["0a2e2cb7-4543-43b3-a04a-40959889bd45"], None, {})
     ]
 )
-def test_get_file_path_on_disk(tmp_path: Path, file_id: List[str], disks: List[str], parent_root_path: Optional[str], expected_result: Dict[str, List[str]]) -> None:
+def test_get_file_path_on_disk(tmp_path: Path, file_id: list[str], disks: list[str], parent_root_path: str | None, expected_result: dict[str, list[str]]) -> None:
     reference_db_path = tmp_path / _TEST_DB_NAME
     create_db(reference_db_path, _DB_TEST_DB_DUMP)
     with FileManagerDatabase(reference_db_path, time.time()) as db:
@@ -207,17 +207,37 @@ def test_get_path_on_disk(tmp_path: Path, path: str, dir_id: int) -> None:
         ("61BB-02E2", False, 3),
     ]
 )
-def test_delete_disk_errors(tmp_path: Path, mocker, disk_name: str, confirm: bool, result: int) -> None:
-    mocker.patch('file_database.file_utils.get_confirmation', lambda x,y: confirm)
+def test_delete_disk_errors(tmp_path: Path, monkeypatch, disk_name: str, confirm: bool, result: int) -> None:
+    monkeypatch.setattr('sys.stdin', StringIO('delete' if confirm else 'cancel'))
     reference_db_path = tmp_path / _TEST_DB_NAME
     create_db(reference_db_path, _DB_TEST_DB_1)
     with FileManagerDatabase(reference_db_path, time.time()) as db:
         assert db.delete_disk(disk_name, False, False) == result
 
 
-def test_delete_disk_force(tmp_path: Path, mocker) -> None:
-    mocker.patch('file_database.file_utils.get_confirmation', lambda x,y: False)
+def test_delete_disk_force(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr('sys.stdin', StringIO('simulated input'))
     reference_db_path = tmp_path / _TEST_DB_NAME
     create_db(reference_db_path, _DB_TEST_DB_1)
     with FileManagerDatabase(reference_db_path, time.time()) as db:
         assert db.delete_disk("61BB-02E2", False, True) == 0
+
+
+@pytest.mark.parametrize(
+    "disk_id, dir_id, expected_files",
+    [
+        (1, 14, {
+            'DSC06979 (copy).JPG': (15, 1.69559020989512157441e+09, 1.69543415968938732153e+09, 2, 3473408, "f8b1465e6340d11f2a28d26cf896e6427ab41f63"),
+            'DSC06979.JPG': (16, 1.6955902099094469547e+09, 1.69543415971338605873e+09, 2, 3473408, "f8b1465e6340d11f2a28d26cf896e6427ab41f63"),
+            'DSC06979c.JPG': (17, 1.69559020993184852597e+09, 1.6954341597253854275e+09, 7, 1215763, "c81bb242e63bb1296fa1062fe5b3118f476193c9"),
+        }),
+        (1, 23, {}),
+    ]
+)
+def test_def_get_db_file_info(tmp_path: Path, disk_id: int, dir_id: int, expected_files: dict[str, tuple[int, float, float, int, int, str]]) -> None:
+    reference_db_path = tmp_path / _TEST_DB_NAME
+    create_db(reference_db_path, _DB_TEST_DB_1)
+    with FileManagerDatabase(reference_db_path, time.time()) as db:
+        db._disk_id = disk_id
+        db._cur_dir_id = dir_id
+        assert db.get_db_file_info() == expected_files

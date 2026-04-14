@@ -4,9 +4,11 @@ import argparse
 import logging
 from pathlib import Path
 
-from file_database import DEFAULT_DATABASE
-from file_manager_implementation import (SORT_OPTIONS, SORT_OPTIONS_UNIQUE,
-                                         FileUtils)
+from file_manager.file_database import DEFAULT_DATABASE
+from file_manager.file_manager_implementation import (SORT_OPTIONS,
+                                                      SORT_OPTIONS_UNIQUE,
+                                                      FileUtils)
+from file_manager.file_utils import check_etag, get_possible_etags
 
 
 def list_disks_command(file_db: FileUtils, args: argparse.Namespace) -> int:
@@ -61,6 +63,16 @@ def path_redundancy_command(file_db: FileUtils, args: argparse.Namespace) -> int
 
 def delete_disk_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     return file_db.delete_disk(args.disk, args.clear_orfan_files, args.force)
+
+
+def etag_check_command(file_db: FileUtils, args: argparse.Namespace) -> int:
+    if args.etag:
+        etag_check_result = check_etag(args.path, args.etag)
+        print(f"ETag for file {args.path} {'matches' if etag_check_result else 'does not match'} provided value {args.etag}")
+        return int(not etag_check_result)
+    else:
+        print(f"Possible ETags for file {args.path}: {', '.join(get_possible_etags(args.path))}")
+        return 0
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -178,6 +190,14 @@ def parse_arguments() -> argparse.Namespace:
                              help="Clear orfan file records after disk deletion",
                              action="store_true", default=False)
 
+    etag_check = subparsers.add_parser(
+        "etag-check", help="Check etag for file on disk")
+    etag_check.set_defaults(func=etag_check_command, cmd_name="etag-check")
+    etag_check.add_argument(
+        "-p", "--path", type=Path, required=True, help="File to check etag for")
+    etag_check.add_argument(
+        "-e", "--etag", type=str, default="", help="ETag to compare with, if not specified will be calculated from file content")
+
     args = arg_parser.parse_args()
     if args.cmd_name in disk_required and not args.disk:
         arg_parser.error(f"-d DISK argument is required for {args.cmd_name}")
@@ -190,11 +210,16 @@ def parse_arguments() -> argparse.Namespace:
 
 def main() -> int:
     """CLI executor."""
+    skip_database = ["etag-check"]
     args = parse_arguments()
     lvl = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(
         level=lvl, format="%(asctime)s [%(levelname)s] %(message)s")
     logging.debug(args)
+
+    if args.cmd_name in skip_database:
+        return args.func(None, args)
+
     with FileUtils(args.database) as file_db:
         return args.func(file_db, args)
 

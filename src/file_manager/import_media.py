@@ -12,11 +12,11 @@ from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
 
-import exifread
+import exifread  # type: ignore
 from yaml import Loader, load
 
-from file_utils import convert_to_bytes, get_lsblk
-from utils import float2timestamp, timeobj2exif_str
+from file_manager.file_utils import convert_to_bytes, get_lsblk
+from file_manager.utils import float2timestamp, timeobj2exif_str
 
 _COMPARE_TIME_DIFF = timedelta(2)  # 2 days
 _DEFAULT_CONFIG = Path(__file__).absolute().parent / "import_config.yaml"
