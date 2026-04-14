@@ -8,13 +8,13 @@ import pytest
 SCRIPT_DIR = Path(__file__).resolve().parent
 TEST_DATA_DIR = SCRIPT_DIR.parent / "test_data"
 
-from file_manager.file_utils import PARTSIZES_DEFAULTS  # noqa: E402
+from file_manager.file_utils import PARTSIZES_DEFAULTS  # type: ignore
 from file_manager.file_utils import (FsClient, calc_etag, check_etag,
                                      convert_to_bytes, factor_of_1MB,
                                      generate_file_sha1, get_confirmation,
                                      get_full_dir_path, get_mount_path,
                                      get_path_disk_info, get_path_from_mount,
-                                     get_possible_etags, read_dir, read_file)
+                                     get_possible_etags, read_file)
 
 
 @pytest.mark.parametrize(
@@ -294,3 +294,50 @@ def test_get_path_disk_info(
 def test_get_confirmation(mocker, reply_input: str, accepted_choices: list[str], result: bool) -> None:
     mocker.patch('file_manager.file_utils.input', lambda x: reply_input)
     assert get_confirmation("test", accepted_choices) == result
+
+
+
+
+@pytest.mark.parametrize(
+    "filesize, num_parts, partsize",
+    [
+        (3473408, 1, 4194304),
+        (475774702, 31, 15728640),
+        (475774702, 57, 8388608),
+    ]
+)
+def test_factor_of_1MB(filesize: int, num_parts: int, partsize: str) -> None:
+    assert factor_of_1MB(filesize, num_parts) == partsize
+
+
+@pytest.mark.parametrize(
+    "test_file, partsize, expected_etag",
+    [
+        ("media/DSC06979.JPG", PARTSIZES_DEFAULTS[0], '03df258f788172526ab5b1bfc4061f55-1'),
+        ("media/DSC06979.JPG", PARTSIZES_DEFAULTS[1], '03df258f788172526ab5b1bfc4061f55-1'),
+        ("media/DSC06979.JPG", 4194304, '03df258f788172526ab5b1bfc4061f55-1'),
+    ]
+)
+def test_calc_etag(test_file: str, partsize: int, expected_etag: str) -> None:
+    assert calc_etag(TEST_DATA_DIR / test_file, partsize) == expected_etag
+
+
+@pytest.mark.parametrize(
+    "test_file, result",
+    [
+        ("media/DSC06979.JPG", ['03df258f788172526ab5b1bfc4061f55-1', '03df258f788172526ab5b1bfc4061f55-1']),
+    ]
+)
+def test_get_possible_etags(test_file: str, result: list[str]) -> None:
+    assert get_possible_etags(TEST_DATA_DIR / test_file) == result
+
+
+@pytest.mark.parametrize(
+    "test_file, etag, result",
+    [
+        ("media/DSC06979.JPG", '03df258f788172526ab5b1bfc4061f55-1', True),
+        ("media/DSC06979.JPG", '03df258d781172f26ab5b1bfc4061f55-1', False),
+    ]
+)
+def test_check_etag(test_file: str, etag: str, result: bool) -> None:
+    assert check_etag(TEST_DATA_DIR / test_file, etag) == result

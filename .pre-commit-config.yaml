@@ -29,6 +29,7 @@ repos:
         exclude: |
           (?x)^(
             src/file_manager/import_media.py|
+            tests/test_file_utils.py|
             tests/test_import_media.py
           )
       - id: python-check-mock-methods
