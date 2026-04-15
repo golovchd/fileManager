@@ -7,12 +7,13 @@ from pathlib import Path
 
 from pyfakefs import fake_filesystem_unittest  # type: ignore
 
-from file_manager.import_media import (ExifTimeError, exif_time2unix,
+from file_manager.import_media import (_DEFAULT_CONFIG, ExifTimeError,
+                                       ImportConfig, exif_time2unix,
                                        file_type_from_name, get_import_list,
                                        read_file_time)
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-TEST_DATA_DIR = SCRIPT_DIR.parent / "test_data"
+TEST_SCRIPT_DIR = Path(__file__).resolve().parent
+TEST_DATA_DIR = TEST_SCRIPT_DIR.parent / "test_data"
 
 
 class ImportMediaFakeFsTestCase(fake_filesystem_unittest.TestCase):
@@ -21,12 +22,12 @@ class ImportMediaFakeFsTestCase(fake_filesystem_unittest.TestCase):
         self.setUpPyfakefs()
 
     def test_file_type(self):
-        self.assertEqual(file_type_from_name('test.JPG'), 'jpg')
-        self.assertEqual(file_type_from_name('test.mpg'), 'mpg')
-        self.assertEqual(file_type_from_name('dir/test.mpg'), 'mpg')
-        self.assertEqual(file_type_from_name('dir/test.rx'), 'rx')
-        self.assertEqual(file_type_from_name('dir/test'), '')
-        self.assertEqual(file_type_from_name('/dir/path/'), '')
+        self.assertEqual(file_type_from_name(Path('test.JPG')), 'jpg')
+        self.assertEqual(file_type_from_name(Path('test.mpg')), 'mpg')
+        self.assertEqual(file_type_from_name(Path('dir/test.mpg')), 'mpg')
+        self.assertEqual(file_type_from_name(Path('dir/test.rx')), 'rx')
+        self.assertEqual(file_type_from_name(Path('dir/test')), '')
+        self.assertEqual(file_type_from_name(Path('/dir/path/')), '')
 
 
 class ImportMediaTestCase(unittest.TestCase):
@@ -47,26 +48,24 @@ class ImportMediaTestCase(unittest.TestCase):
             'IMG_0013.JPG',
         ]
         present_dict = {
-            'DSC06979.JPG': 'test_data/storage/DSC06979.JPG',
-            'IMG_0004.JPG': 'test_data/storage/tagged/IMG_0004.JPG',
+            'DSC06979.JPG': TEST_DATA_DIR / 'storage/DSC06979.JPG',
+            'IMG_0004.JPG': TEST_DATA_DIR / 'storage/tagged/IMG_0004.JPG',
         }
         present_tagged_dict = {
-            'DSC06979.JPG': 'test_data/storage/tagged/DSC06979.JPG',
-            'IMG_0004.JPG': 'test_data/storage/tagged/IMG_0004.JPG',
+            'DSC06979.JPG': TEST_DATA_DIR / 'storage/tagged/DSC06979.JPG',
+            'IMG_0004.JPG': TEST_DATA_DIR / 'storage/tagged/IMG_0004.JPG',
         }
         not_imported, already_imported = get_import_list(
-            'test_data/media', 'test_data/storage',
-            filter_storage=False)
+            TEST_DATA_DIR / 'media', TEST_DATA_DIR / 'storage', [])
         self.assertEqual(sorted(missing_list), sorted(not_imported))
         self.assertEqual(present_dict, already_imported)
         not_imported, already_imported = get_import_list(
-            'test_data/media', 'test_data/storage/tagged',
-            filter_storage=False)
+            TEST_DATA_DIR / 'media', TEST_DATA_DIR / 'storage/tagged', [])
         self.assertEqual(sorted(missing_list), sorted(not_imported))
         self.assertEqual(present_tagged_dict, already_imported)
 
     def test_default_config(self):
-        config = import_media.ImportConfig(import_media._DEFAULT_CONFIG)
+        config = ImportConfig(_DEFAULT_CONFIG)
         self.assertIsNotNone(config.storage_regex_list)
         self.assertIsNotNone(config.import_roots_list)
         self.assertIsNotNone(config.free_space_limits)

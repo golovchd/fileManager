@@ -19,7 +19,7 @@ from file_manager.file_utils import convert_to_bytes, get_lsblk
 from file_manager.utils import float2timestamp, timeobj2exif_str
 
 _COMPARE_TIME_DIFF = timedelta(2)  # 2 days
-_DEFAULT_CONFIG = Path(__file__).absolute().parent / "import_config.yaml"
+_DEFAULT_CONFIG = Path(__file__).absolute().parents[2] / "import_config.yaml"
 
 _FILE_DATETIME_CACHE : dict[str, datetime] = {}
 
@@ -243,12 +243,12 @@ class MediaFiles:
             self.import_list[str(dir_path)] = dir_list
             self.count += dir_count
 
-    def import_media(self, storage_dirs: list[str]) -> int:
+    def import_media(self, dirs_filter: list[str]) -> int:
         """Read dirs under self.root and import files from each dir."""
         if self.count > 0:
             return self.count
 
-        dir_list =  [self.root / dir for dir in storage_dirs] if storage_dirs else [self.root]
+        dir_list =  [self.root / dir for dir in dirs_filter] if dirs_filter else [self.root]
         logging.info(f"Import media {self.root} from {dir_list}")
         for dir_path in dir_list:
             for root, _, files in dir_path.walk():
@@ -346,7 +346,7 @@ class MediaFilesIterator:
 
 
 def get_import_list(
-        media_root: Path, storage_root: Path, storage_dirs: list[str]
+        media_root: Path, storage_root: Path, storage_dirs_filter: list[str]
         ) -> tuple[list[Path], dict[str, Path]]:
     """Generating list of files to import.
 
@@ -354,9 +354,9 @@ def get_import_list(
       for not yet present in storage_root
 
       Args:
-        media_root: path to dir to import from
-        storage_root: path to destination dir
-        filter_storage: if True processing only MediaFiles.storage_dirs
+        media_root: Path to dir to import from
+        storage_root: Path to destination dir
+        storage_dirs_filter: list of dirs to process
       Returns:
         tuple, list of files from media_root tree not found in storage_root and
         dictionary with files from media_root as keys and their matches in
@@ -370,7 +370,7 @@ def get_import_list(
     if not media.count:
         return (not_imported_files, already_imported_files)
     storage = MediaFiles(storage_root)
-    storage.import_media(storage_dirs)
+    storage.import_media(storage_dirs_filter)
     logging.info(f"{storage_root} contain {storage.count} files")
     count = 0
     present_count = 0
