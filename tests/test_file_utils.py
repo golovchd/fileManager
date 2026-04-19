@@ -113,7 +113,7 @@ def test_get_path_from_mount_real_path():
 @pytest.mark.parametrize(
     "test_path, expected_files, expected_dirs",
     [
-        ("test_data", [], ["media", "storage"]),
+        ("test_data", ["min_import_config.yaml"], ["media", "storage"]),
         ("test_data/media",
          [
              "6TB-2 benchmark 2018-08-25 20-58-29.png",

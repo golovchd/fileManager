@@ -7,8 +7,7 @@ from pathlib import Path
 
 from pyfakefs import fake_filesystem_unittest  # type: ignore
 
-from file_manager.import_media import (_DEFAULT_CONFIG, ExifTimeError,
-                                       ImportConfig, exif_time2unix,
+from file_manager.import_media import (ExifTimeError, exif_time2unix,
                                        file_type_from_name, get_import_list,
                                        read_file_time)
 
@@ -63,10 +62,3 @@ class ImportMediaTestCase(unittest.TestCase):
             TEST_DATA_DIR / 'media', TEST_DATA_DIR / 'storage/tagged', [])
         self.assertEqual(sorted(missing_list), sorted(not_imported))
         self.assertEqual(present_tagged_dict, already_imported)
-
-    def test_default_config(self):
-        config = ImportConfig(_DEFAULT_CONFIG)
-        self.assertIsNotNone(config.storage_regex_list)
-        self.assertIsNotNone(config.import_roots_list)
-        self.assertIsNotNone(config.free_space_limits)
-        self.assertIsNotNone(config.media_config)
