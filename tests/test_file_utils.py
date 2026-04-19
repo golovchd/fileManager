@@ -58,6 +58,11 @@ def test_get_mount_path():
     assert get_mount_path(SCRIPT_DIR).is_mount()
 
 
+def test_get_mount_path_error():
+    with pytest.raises(ValueError):
+        get_mount_path(SCRIPT_DIR / 'non-existing-path')
+
+
 @pytest.mark.parametrize(
     "test_dir_path, mount_path, expected_result",
     [

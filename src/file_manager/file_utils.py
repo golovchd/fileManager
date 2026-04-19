@@ -104,21 +104,6 @@ def get_path_disk_info(dir_path: Path) -> dict[str, Any]:
     raise ValueError(f"Failed to locate device for path {dir_path}")
 
 
-def read_dir(dir_path: Path) -> tuple[list[str], list[str]]:
-    """Reading details of files and subdirs."""
-    try:
-        files = sorted([file.name for file in dir_path.iterdir()
-                        if file.is_file() and not file.is_symlink()])
-        dirs = sorted([dir.name for dir in dir_path.iterdir()
-                       if dir.is_dir() and not dir.is_symlink() and
-                       dir.name not in _IGNORED_DIRS])
-        logging.debug(f"read_dir({dir_path}) dirs: {dirs}, files: {files}")
-        return files, dirs
-    except PermissionError:
-        logging.warning(f"read_dir missing permission to read {dir_path}")
-        return [], []
-
-
 def generate_file_sha1(
         file_path: Path, blocksize: int = 2**20) -> tuple[str, int]:
     """Safe way to get SHA1 for big files."""
