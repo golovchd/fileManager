@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from file_manager.import_config import ImportConfig
-from file_manager.import_media import _DEFAULT_CONFIG
+from file_manager.import_config import ImportConfig  # type: ignore
+from file_manager.import_media import _DEFAULT_CONFIG  # type: ignore
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 TEST_DATA_DIR = SCRIPT_DIR.parent / "test_data"
@@ -18,7 +18,7 @@ TEST_DATA_DIR = SCRIPT_DIR.parent / "test_data"
         (TEST_DATA_DIR / "min_import_config.yaml"),
     ]
 )
-def test_default_config(test_config: Path):
+def test_default_config(test_config: Path) -> None:
     config = ImportConfig(test_config)
     assert config.storage_regex_list is not None
     assert config.import_roots_list is not None

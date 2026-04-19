@@ -12,7 +12,7 @@ from pathlib import Path
 
 import exifread  # type: ignore
 
-from file_manager.file_utils import get_lsblk
+from file_manager.file_utils import get_lsblk, get_storages
 from file_manager.import_config import ImportConfig, MediaConfig, MediaType
 from file_manager.utils import float2timestamp, timeobj2exif_str
 
@@ -342,40 +342,6 @@ def print_time(path: Path) -> None:
     for media_file in media:
         file_path = media_file[0] / media_file[1]
         logging.info(f"file_time({file_path})={read_file_time(file_path)}")
-
-
-def have_enough_free_space(
-        storage_mount: str, free_space_limit: dict[str, int]) -> bool:
-    """Checks if storage_mount comply to free_space_limit"""
-    if not free_space_limit:
-        logging.debug(f"No free space requirements for {storage_mount}")
-        return True
-    statvfs = os.statvfs(storage_mount)
-    user_free_space = statvfs.f_frsize * statvfs.f_bavail
-    percent_free_space = 100 * statvfs.f_bavail / statvfs.f_blocks
-    logging.debug(f"Free space for {storage_mount} {user_free_space}B, "
-                  f"{percent_free_space:.2n}%, limit {free_space_limit}")
-    match_absolute = (not free_space_limit.get("absolute") or
-                      user_free_space > free_space_limit["absolute"])
-    match_percentage = (not free_space_limit.get("percentage") or
-                        percent_free_space > free_space_limit["percentage"])
-    return match_absolute and match_percentage
-
-
-def get_storages(
-        storage_regex_list: list[str],
-        free_space_limit: dict[str, int]) -> list[Path]:
-    """Returns currently mounted strages that comply to config"""
-    logging.debug(f"storage_regex_list: {storage_regex_list}")
-    return [
-        Path(device_info["mountpoint"]) for device_info in get_lsblk()
-        if (device_info["mountpoint"] and
-            any(re.match(storage_regex,
-                         Path(device_info["mountpoint"]).name)
-                for storage_regex in storage_regex_list) and
-            have_enough_free_space(
-                    device_info["mountpoint"], free_space_limit))
-    ]
 
 
 def get_media_list(

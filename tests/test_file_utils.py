@@ -14,7 +14,8 @@ from file_manager.file_utils import (FsClient, calc_etag, check_etag,
                                      generate_file_sha1, get_confirmation,
                                      get_full_dir_path, get_mount_path,
                                      get_path_disk_info, get_path_from_mount,
-                                     get_possible_etags, read_file)
+                                     get_possible_etags, get_storages,
+                                     have_enough_free_space, read_file)
 
 
 @pytest.mark.parametrize(
@@ -341,3 +342,43 @@ def test_get_possible_etags(test_file: str, result: list[str]) -> None:
 )
 def test_check_etag(test_file: str, etag: str, result: bool) -> None:
     assert check_etag(TEST_DATA_DIR / test_file, etag) == result
+
+
+@pytest.mark.parametrize(
+    "mount, free_space_limit, expected_result",
+    [
+        ("/", None, True),
+        ("/", {}, True),
+        ("/", {"absolute": 0}, True),
+        ("/", {"percentage": 0}, True),
+        ("/", {"absolute": 1}, True),
+        ("/", {"percentage": 1}, True),
+        ("/", {"absolute": 1 * 1000**3}, True),  # Assume any host will have at lest 1GB of system disk
+        ("/", {"percentage": 100}, False),
+        ("/", {"absolute": 0, "percentage": 0}, True),
+        ("/", {"absolute": 1, "percentage": 1}, True),
+        ("/", {"absolute": 100 * 1000**4}, False),  # Assume any host will have under 100TB of system disk
+    ]
+)
+def test_have_enough_free_space(mount: str, free_space_limit: dict[str, int], expected_result: bool) -> None:
+    assert have_enough_free_space(mount, free_space_limit) == expected_result
+
+
+@pytest.mark.parametrize(
+    "storage_regex_list, free_space_limit, expected_result",
+    [
+        (["^$"], None, [Path("/")]),
+        (["^$"], {}, [Path("/")]),
+        (["^$"], {"absolute": 0}, [Path("/")]),
+        (["^$"], {"percentage": 0}, [Path("/")]),
+        (["^$"], {"absolute": 1}, [Path("/")]),
+        (["^$"], {"percentage": 1}, [Path("/")]),
+        (["^$"], {"absolute": 1 * 1000**3}, [Path("/")]),  # Assume any host will have at lest 1GB of system disk
+        (["^$"], {"percentage": 100}, []),
+        (["^$"], {"absolute": 0, "percentage": 0}, [Path("/")]),
+        (["^$"], {"absolute": 1, "percentage": 1}, [Path("/")]),
+        (["^$"], {"absolute": 100 * 1000**4}, []),  # Assume any host will have under 100TB of system disk
+    ]
+)
+def test_get_storages(storage_regex_list: list[str], free_space_limit: dict[str, int], expected_result: bool) -> None:
+    assert get_storages(storage_regex_list, free_space_limit) == expected_result

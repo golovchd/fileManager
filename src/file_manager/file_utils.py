@@ -9,6 +9,7 @@ import re
 import subprocess
 import sys
 from hashlib import md5
+from os import statvfs
 from pathlib import Path
 from time import CLOCK_MONOTONIC, clock_gettime_ns
 from typing import Any
@@ -196,6 +197,40 @@ def get_possible_etags(file_path: Path) -> list[str]:
     """Returns possible ETags for given file based on its size and default partsizes."""
     return [
         calc_etag(file_path, partsize) for partsize in PARTSIZES_DEFAULTS
+    ]
+
+
+def have_enough_free_space(
+        storage_mount: str, free_space_limit: dict[str, int]) -> bool:
+    """Checks if storage_mount comply to free_space_limit"""
+    if not free_space_limit:
+        logging.debug(f"No free space requirements for {storage_mount}")
+        return True
+    storage_statvfs = statvfs(storage_mount)
+    user_free_space = storage_statvfs.f_frsize * storage_statvfs.f_bavail
+    percent_free_space = 100 * storage_statvfs.f_bavail / storage_statvfs.f_blocks
+    logging.debug(f"Free space for {storage_mount} {user_free_space}B, "
+                  f"{percent_free_space:.2n}%, limit {free_space_limit}")
+    match_absolute = (not free_space_limit.get("absolute") or
+                      user_free_space > free_space_limit["absolute"])
+    match_percentage = (not free_space_limit.get("percentage") or
+                        percent_free_space > free_space_limit["percentage"])
+    return match_absolute and match_percentage
+
+
+def get_storages(
+        storage_regex_list: list[str],
+        free_space_limit: dict[str, int]) -> list[Path]:
+    """Returns currently mounted strages that comply to config"""
+    logging.debug(f"storage_regex_list: {storage_regex_list}")
+    return [
+        Path(device_info["mountpoint"]) for device_info in get_lsblk()
+        if (device_info["mountpoint"] and
+            any(re.match(storage_regex,
+                         Path(device_info["mountpoint"]).name)
+                for storage_regex in storage_regex_list) and
+            have_enough_free_space(
+                    device_info["mountpoint"], free_space_limit))
     ]
 
 
