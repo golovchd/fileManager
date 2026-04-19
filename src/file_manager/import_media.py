@@ -125,6 +125,54 @@ def compare_files(file_name_1: str, dir_path_1: Path, dir_path_2: Path, file_nam
     return exif_time_1 == read_file_time(file_path_2)
 
 
+class MediaFilesIterator:
+    """Iterator class for MediaFiles."""
+    def __init__(self, media: MediaFiles) -> None:
+        self.media = media
+        self.dir_names = self.media.get_all_dir_names()
+        self.dir_idx = 0
+        self.dir_count = len(self.dir_names)
+        self.file_idx = 0
+        self._init_dir()
+
+    def __iter__(self):
+        """Iterator __iter__ method."""
+        return self
+
+    def _init_dir(self, stop_iteration:bool=False) -> None:
+        """Switching to next dir or resetting iterator."""
+        if self.dir_idx < self.dir_count:
+            self.cur_dir = self.media.get_dir_files(
+                self.dir_names[self.dir_idx])
+            self.cur_dir_count = len(self.cur_dir)
+            self.file_idx = 0
+        else:
+            self.cur_dir = None
+            self.cur_dir_count = 0
+            if stop_iteration:
+                raise StopIteration()
+
+    def _next_file(self, stop_iteration:bool=False) -> tuple[Path, str]:
+        """Returns next file from current dir."""
+        if self.file_idx < self.cur_dir_count:
+            file_name = self.cur_dir[self.file_idx]
+            self.file_idx += 1
+            return (Path(self.dir_names[self.dir_idx]), file_name)
+        if stop_iteration:
+            raise StopIteration()
+        else:
+            raise IterateDir()
+
+    def __next__(self) -> tuple[Path, str]:
+        """Iterator next method."""
+        try:
+            return self._next_file()
+        except IterateDir:
+            self.dir_idx += 1
+            self._init_dir(True)
+            return self._next_file()
+
+
 class MediaFiles:
     """Iterable representation of dir tree and files located in that tree."""
     default_types = {
@@ -238,54 +286,6 @@ class MediaFiles:
                         else:
                             return found_path
         return copies_list if find_all else None
-
-
-class MediaFilesIterator:
-    """Iterator class for MediaFiles."""
-    def __init__(self, media: MediaFiles) -> None:
-        self.media = media
-        self.dir_names = self.media.get_all_dir_names()
-        self.dir_idx = 0
-        self.dir_count = len(self.dir_names)
-        self.file_idx = 0
-        self._init_dir()
-
-    def __iter__(self):
-        """Iterator __iter__ method."""
-        return self
-
-    def _init_dir(self, stop_iteration:bool=False) -> None:
-        """Switching to next dir or resetting iterator."""
-        if self.dir_idx < self.dir_count:
-            self.cur_dir = self.media.get_dir_files(
-                self.dir_names[self.dir_idx])
-            self.cur_dir_count = len(self.cur_dir)
-            self.file_idx = 0
-        else:
-            self.cur_dir = None
-            self.cur_dir_count = 0
-            if stop_iteration:
-                raise StopIteration()
-
-    def _next_file(self, stop_iteration:bool=False) -> tuple[Path, str]:
-        """Returns next file from current dir."""
-        if self.file_idx < self.cur_dir_count:
-            file_name = self.cur_dir[self.file_idx]
-            self.file_idx += 1
-            return (Path(self.dir_names[self.dir_idx]), file_name)
-        if stop_iteration:
-            raise StopIteration()
-        else:
-            raise IterateDir()
-
-    def __next__(self) -> tuple[Path, str]:
-        """Iterator next method."""
-        try:
-            return self._next_file()
-        except IterateDir:
-            self.dir_idx += 1
-            self._init_dir(True)
-            return self._next_file()
 
 
 def get_import_list(
