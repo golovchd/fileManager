@@ -1,14 +1,18 @@
 """Import Media module unittests."""
 from __future__ import annotations
 
+import re
 import unittest
 from datetime import datetime
 from pathlib import Path
 
+import pytest
 from pyfakefs import fake_filesystem_unittest  # type: ignore
 
-from file_manager.import_media import (ExifTimeError, exif_time2unix,
-                                       file_type_from_name, get_import_list,
+from file_manager.import_config import MediaConfig  # type: ignore
+from file_manager.import_media import ExifTimeError  # type: ignore
+from file_manager.import_media import (exif_time2unix, file_type_from_name,
+                                       get_import_list, get_media_list,
                                        read_file_time)
 
 TEST_SCRIPT_DIR = Path(__file__).resolve().parent
@@ -62,3 +66,15 @@ class ImportMediaTestCase(unittest.TestCase):
             TEST_DATA_DIR / 'media', TEST_DATA_DIR / 'storage/tagged', [])
         self.assertEqual(sorted(missing_list), sorted(not_imported))
         self.assertEqual(present_tagged_dict, already_imported)
+
+
+root_empty_config = MediaConfig("root", re.compile("^$"), [])
+
+@pytest.mark.parametrize(
+    "media_config, expected_result",
+    [
+        ({"root": root_empty_config}, {Path("/"): root_empty_config}),
+    ]
+)
+def test_get_media_list(media_config: dict[str, MediaConfig], expected_result: dict[Path, MediaConfig]) -> None:
+    assert get_media_list(media_config) == expected_result
