@@ -37,6 +37,7 @@ dev = [
     "pytest-cov>=4.0.0",
     "pyfakefs>=5.9.1",
     "pytest-mock",
+    "pre-commit"
 ]
 
 [tool.pytest.ini_options]

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import MINYEAR, datetime
 from pathlib import Path
 
 import pytest
@@ -38,14 +38,28 @@ def test_exif_time2unix() -> None:
     with pytest.raises(ExifTimeError):
         test_file_date = read_file_time(
             TEST_DATA_DIR / 'media/not_an_image', True)
+    assert exif_time2unix('0000:00:00 00:00:00') == datetime(MINYEAR, 1, 1)
+    assert exif_time2unix('2019-09-04T05:00:00') == datetime(2019, 9, 4, 5, 0, 0)
     test_file_date = read_file_time(
         TEST_DATA_DIR / 'media/DSC06979.JPG', True)
     assert test_file_date == datetime(2018, 2, 19, 11, 5, 43)
 
 
-def test_get_import_list() -> None:
+@pytest.mark.parametrize(
+    "only_same_names",
+    [
+        (True),
+        (False),
+    ]
+)
+def test_get_import_list(only_same_names: bool) -> None:
     missing_list = [
         '6TB-2 benchmark 2018-08-25 20-58-29.png',
+        'IMG_0013.JPG',
+    ]
+    missing_list_tagged = [
+        '6TB-2 benchmark 2018-08-25 20-58-29.png',
+        'DSC06979.JPG',
         'IMG_0013.JPG',
     ]
     present_dict = {
@@ -57,12 +71,12 @@ def test_get_import_list() -> None:
         'IMG_0004.JPG': TEST_DATA_DIR / 'storage/tagged/IMG_0004.JPG',
     }
     not_imported, already_imported = get_import_list(
-        TEST_DATA_DIR / 'media', TEST_DATA_DIR / 'storage', [])
+        TEST_DATA_DIR / 'media', TEST_DATA_DIR / 'storage', [], only_same_names)
     assert sorted(missing_list) == sorted(not_imported)
     assert present_dict == already_imported
     not_imported, already_imported = get_import_list(
-        TEST_DATA_DIR / 'media', TEST_DATA_DIR / 'storage/tagged', [])
-    assert sorted(missing_list) == sorted(not_imported)
+        TEST_DATA_DIR / 'media', TEST_DATA_DIR / 'storage/tagged', [], only_same_names)
+    assert sorted(missing_list_tagged) == sorted(not_imported)
     assert present_tagged_dict, already_imported
 
 
