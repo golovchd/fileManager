@@ -399,7 +399,7 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
     """Definiing and parsing arguments."""
     actions = [
         'import',
-        'print_time',
+        'print-time',
     ]
     arg_parser = argparse.ArgumentParser(
         description='Import photos from media to storage')
