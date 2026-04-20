@@ -410,7 +410,7 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
     arg_parser.add_argument('--storage', type=Path, default=None,
                             help='Storage to save imported media files')
     arg_parser.add_argument('--action', help='Action to perform',
-                            choices=actions, default='import')
+                            choices=actions, default=actions[0])
     arg_parser.add_argument(
         '--check-entire-storage',
         help='Load data from entire storage, not only from Photos/Videos locations',
@@ -432,7 +432,7 @@ def main(argv: Any=[]) -> int:
         level=logging.WARNING - 10 * (args.verbose if args.verbose < 3 else 2))
     if args.action == 'import':
         return import_action(args)
-    elif args.action == 'print_time':
+    if args.action == 'print_time':
         print_time_action(args)
     return 0
 
