@@ -9,6 +9,7 @@ import re
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import exifread  # type: ignore
 
@@ -378,7 +379,7 @@ def import_action(args: argparse.Namespace) -> int:
         for media in media_list:
             files_to_import.extend(get_import_list(
                 media, storage, [] if args.check_entire_storage else config.import_roots_list)[0])
-    logging.info(files_to_import)
+        logging.info(f"Import to {storage}: {files_to_import}")
     return 0
 
 
@@ -423,9 +424,9 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
     return arg_parser.parse_args(args=argv)
 
 
-def main(argv: list[str]) -> int:
+def main(argv: Any=[]) -> int:
     """Module as util use wrapper."""
-    args = parse_arguments(argv)
+    args = parse_arguments(argv[1:] if argv else sys.argv[1:])
     logging.basicConfig(
         format="%(asctime)s [%(levelname)s] %(message)s",
         level=logging.WARNING - 10 * (args.verbose if args.verbose < 3 else 2))
@@ -437,4 +438,4 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == '__main__':
-    exit(main(sys.argv[1:]))
+    exit(main(sys.argv))
