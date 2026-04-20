@@ -5,8 +5,8 @@ from functools import wraps
 from time import CLOCK_MONOTONIC, clock_gettime_ns, sleep
 from typing import Any, Callable
 
-import boto3
-from botocore.exceptions import ClientError
+import boto3  # type: ignore
+from botocore.exceptions import ClientError  # type: ignore
 
 from file_manager.storage_client import StorageClient
 

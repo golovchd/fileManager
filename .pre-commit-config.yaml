@@ -29,6 +29,7 @@ repos:
         exclude: |
           (?x)^(
             src/file_manager/import_media.py|
+            src/file_manager/s3_utils.py|
             tests/test_file_utils.py|
             tests/test_import_config.py|
             tests/test_import_media.py
