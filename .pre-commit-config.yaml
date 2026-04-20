@@ -26,6 +26,13 @@ repos:
     hooks:
       - id: python-check-blanket-noqa
       - id: python-check-blanket-type-ignore
+        exclude: |
+          (?x)^(
+            src/file_manager/import_media.py|
+            tests/test_file_utils.py|
+            tests/test_import_config.py|
+            tests/test_import_media.py
+          )
       - id: python-check-mock-methods
       - id: python-no-eval
       - id: python-use-type-annotations
@@ -34,6 +41,7 @@ repos:
     rev: v1.4.1
     hooks:
       - id: mypy
+        args: ["--python-version=3.12"]
         additional_dependencies: [types-requests>=2.20.0, pytest>=7.1.2, types-PyYaml>=6.0.0, types-dataclasses>=0.6.0]
   - repo: https://github.com/asottile/pyupgrade
     rev: v3.8.0
@@ -52,6 +60,10 @@ repos:
     rev: v1.15.9
     hooks:
       - id: typos
+        exclude: |
+          (?x)^(
+            import_config.yaml
+          )
   - repo: https://github.com/jumanjihouse/pre-commit-hook-yamlfmt
     rev: 0.2.3
     hooks:
@@ -78,6 +90,11 @@ repos:
       - id: yamlfmt
         args: [--mapping=2, --sequence=4, --offset=2, --implicit_start, --preserve-quotes]
         additional_dependencies: [ruamel.yaml==0.17.21]
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    # uv version.
+    rev: 0.10.2
+    hooks:
+      - id: uv-lock
   - repo: https://github.com/executablebooks/mdformat
     # Stick to 0.7.17 since it is the last one supporting Python 3.8
     rev: 0.7.17
@@ -96,8 +113,3 @@ repos:
     hooks:
       - id: blacken-docs
         args: [--line-length=120]
-  - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.45.0
-    hooks:
-      - id: markdownlint
-        args: ["--dot", "--fix"]

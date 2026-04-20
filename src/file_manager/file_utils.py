@@ -5,9 +5,11 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import subprocess
 import sys
 from hashlib import md5
+from os import statvfs
 from pathlib import Path
 from time import CLOCK_MONOTONIC, clock_gettime_ns
 from typing import Any
@@ -15,11 +17,33 @@ from typing import Any
 from file_manager.storage_client import StorageClient
 
 _IGNORED_DIRS = [".", "..", "$RECYCLE.BIN"]
+_KiB = 1024
+_KB = 1000
+_BYTES_SCALE = {
+        "B": 1,
+        "KiB": _KiB ** 1, "K": _KiB ** 1, "KB": _KB ** 1,
+        "MiB": _KiB ** 2, "M": _KiB ** 2, "MB": _KB ** 2,
+        "GiB": _KiB ** 3, "G": _KiB ** 3, "GB": _KB ** 3,
+        "TiB": _KiB ** 4, "T": _KiB ** 4, "TB": _KB ** 4,
+}
+_SIZE_REGEX = re.compile(
+        r"^(?P<number>(?P<int>\d+)(\.\d+|))(?P<scale>([KMGT]|)(i|)(B|))$"
+)
 
 PARTSIZES_DEFAULTS : list[int] = [ ## Default Partsizes Map (bytes)
   8388608, # aws_cli/boto3
   15728640, # s3cmd
 ]
+
+
+def convert_to_bytes(size: str) -> int:
+    """Convert size designation into integer bytes value."""
+    match = re.match(_SIZE_REGEX, size)
+    if not match:
+        raise ValueError(f"{size} is not correct size designation")
+    return (int(
+            float(match.group("number")) * _BYTES_SCALE[match.group("scale")])
+            if match.group("scale") else int(match.group("int")))
 
 
 def get_full_dir_path(path: Path) -> Path:
@@ -33,6 +57,10 @@ def get_full_dir_path(path: Path) -> Path:
 def get_mount_path(dir_path: Path) -> Path:
     """Returning path of mount point for given dir."""
     logging.debug(f"get_mount_path for {dir_path}")
+    dir_path = dir_path.resolve()
+    if not dir_path.exists():
+        raise ValueError(
+            f"Could not get mount path of non-existent {dir_path}")
     while not dir_path.is_mount():
         dir_path = dir_path.parent
     logging.debug(f"mount_path {dir_path}")
@@ -154,6 +182,40 @@ def get_possible_etags(file_path: Path) -> list[str]:
     """Returns possible ETags for given file based on its size and default partsizes."""
     return [
         calc_etag(file_path, partsize) for partsize in PARTSIZES_DEFAULTS
+    ]
+
+
+def have_enough_free_space(
+        storage_mount: str, free_space_limit: dict[str, int]) -> bool:
+    """Checks if storage_mount comply to free_space_limit"""
+    if not free_space_limit:
+        logging.debug(f"No free space requirements for {storage_mount}")
+        return True
+    storage_statvfs = statvfs(storage_mount)
+    user_free_space = storage_statvfs.f_frsize * storage_statvfs.f_bavail
+    percent_free_space = 100 * storage_statvfs.f_bavail / storage_statvfs.f_blocks
+    logging.debug(f"Free space for {storage_mount} {user_free_space}B, "
+                  f"{percent_free_space:.2n}%, limit {free_space_limit}")
+    match_absolute = (not free_space_limit.get("absolute") or
+                      user_free_space > free_space_limit["absolute"])
+    match_percentage = (not free_space_limit.get("percentage") or
+                        percent_free_space > free_space_limit["percentage"])
+    return match_absolute and match_percentage
+
+
+def get_storages(
+        storage_regex_list: list[str],
+        free_space_limit: dict[str, int]) -> list[Path]:
+    """Returns currently mounted strages that comply to config"""
+    logging.debug(f"storage_regex_list: {storage_regex_list}")
+    return [
+        Path(device_info["mountpoint"]) for device_info in get_lsblk()
+        if (device_info["mountpoint"] and
+            any(re.match(storage_regex,
+                         Path(device_info["mountpoint"]).name)
+                for storage_regex in storage_regex_list) and
+            have_enough_free_space(
+                    device_info["mountpoint"], free_space_limit))
     ]
 
 

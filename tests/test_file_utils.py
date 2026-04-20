@@ -8,13 +8,44 @@ import pytest
 SCRIPT_DIR = Path(__file__).resolve().parent
 TEST_DATA_DIR = SCRIPT_DIR.parent / "test_data"
 
-from file_manager.file_utils import PARTSIZES_DEFAULTS  # noqa: E402
+from file_manager.file_utils import PARTSIZES_DEFAULTS  # type: ignore
 from file_manager.file_utils import (FsClient, calc_etag, check_etag,
-                                     factor_of_1MB, generate_file_sha1,
-                                     get_confirmation, get_full_dir_path,
-                                     get_mount_path, get_path_disk_info,
-                                     get_path_from_mount, get_possible_etags,
-                                     read_file)
+                                     convert_to_bytes, factor_of_1MB,
+                                     generate_file_sha1, get_confirmation,
+                                     get_full_dir_path, get_mount_path,
+                                     get_path_disk_info, get_path_from_mount,
+                                     get_possible_etags, get_storages,
+                                     have_enough_free_space, read_file)
+
+
+@pytest.mark.parametrize(
+    "designation, expected",
+    [
+        ("25KiB", 25 * 1024),
+        ("25K", 25 * 1024),
+        ("25.5", 25),
+        ("25.5B", 25),
+        ("25.5G", int(25.5 * 1024 ** 3)),
+        ("25.3GB", int(25.3 * 1000 ** 3)),
+        ("25.5KiB", int(25.5 * 1024)),
+        ("25.5TiB", int(25.5 * 1024 ** 4)),
+        ("25.5TB", int(25.5 * 1000 ** 4)),
+    ]
+)
+def test__success__convert_to_bytes(designation: str, expected: int) -> None:
+    assert convert_to_bytes(designation) == expected
+
+
+@pytest.mark.parametrize(
+    "designation",
+    [
+        "25ZiB",
+        "25,5",
+    ]
+)
+def test__failures__convert_to_bytes(designation: str) -> None:
+    with pytest.raises(ValueError):
+        convert_to_bytes(designation)
 
 
 def test_get_full_dir_path():
@@ -25,6 +56,11 @@ def test_get_full_dir_path():
 
 def test_get_mount_path():
     assert get_mount_path(SCRIPT_DIR).is_mount()
+
+
+def test_get_mount_path_error():
+    with pytest.raises(ValueError):
+        get_mount_path(SCRIPT_DIR / 'non-existing-path')
 
 
 @pytest.mark.parametrize(
@@ -83,7 +119,7 @@ def test_get_path_from_mount_real_path():
 @pytest.mark.parametrize(
     "test_path, expected_files, expected_dirs",
     [
-        ("test_data", [], ["media", "storage"]),
+        ("test_data", ["min_import_config.yaml"], ["media", "storage"]),
         ("test_data/media",
          [
              "6TB-2 benchmark 2018-08-25 20-58-29.png",
@@ -266,6 +302,8 @@ def test_get_confirmation(mocker, reply_input: str, accepted_choices: list[str],
     assert get_confirmation("test", accepted_choices) == result
 
 
+
+
 @pytest.mark.parametrize(
     "filesize, num_parts, partsize",
     [
@@ -309,3 +347,43 @@ def test_get_possible_etags(test_file: str, result: list[str]) -> None:
 )
 def test_check_etag(test_file: str, etag: str, result: bool) -> None:
     assert check_etag(TEST_DATA_DIR / test_file, etag) == result
+
+
+@pytest.mark.parametrize(
+    "mount, free_space_limit, expected_result",
+    [
+        ("/", None, True),
+        ("/", {}, True),
+        ("/", {"absolute": 0}, True),
+        ("/", {"percentage": 0}, True),
+        ("/", {"absolute": 1}, True),
+        ("/", {"percentage": 1}, True),
+        ("/", {"absolute": 1 * 1000**3}, True),  # Assume any host will have at lest 1GB of system disk
+        ("/", {"percentage": 100}, False),
+        ("/", {"absolute": 0, "percentage": 0}, True),
+        ("/", {"absolute": 1, "percentage": 1}, True),
+        ("/", {"absolute": 100 * 1000**4}, False),  # Assume any host will have under 100TB of system disk
+    ]
+)
+def test_have_enough_free_space(mount: str, free_space_limit: dict[str, int], expected_result: bool) -> None:
+    assert have_enough_free_space(mount, free_space_limit) == expected_result
+
+
+@pytest.mark.parametrize(
+    "storage_regex_list, free_space_limit, expected_result",
+    [
+        (["^$"], None, [Path("/")]),
+        (["^$"], {}, [Path("/")]),
+        (["^$"], {"absolute": 0}, [Path("/")]),
+        (["^$"], {"percentage": 0}, [Path("/")]),
+        (["^$"], {"absolute": 1}, [Path("/")]),
+        (["^$"], {"percentage": 1}, [Path("/")]),
+        (["^$"], {"absolute": 1 * 1000**3}, [Path("/")]),  # Assume any host will have at lest 1GB of system disk
+        (["^$"], {"percentage": 100}, []),
+        (["^$"], {"absolute": 0, "percentage": 0}, [Path("/")]),
+        (["^$"], {"absolute": 1, "percentage": 1}, [Path("/")]),
+        (["^$"], {"absolute": 100 * 1000**4}, []),  # Assume any host will have under 100TB of system disk
+    ]
+)
+def test_get_storages(storage_regex_list: list[str], free_space_limit: dict[str, int], expected_result: bool) -> None:
+    assert get_storages(storage_regex_list, free_space_limit) == expected_result
