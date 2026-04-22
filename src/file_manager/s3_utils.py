@@ -61,11 +61,6 @@ def read_file_info(client: S3Client, key: str) -> Any:
     return client.session_client.head_object(Bucket=client._bucket, Key=key)
 
 
-@retry_decorator
-def read_file_attributes(client: S3Client, key: str) -> Any:
-    return client.session_client.get_object_attributes(Bucket=client._bucket, Key=key, ObjectAttributes=["ETag", "ObjectSize", "StorageClass"])
-
-
 class S3Client(StorageClient):
     def __init__(self, media: str) -> None:
         self.set_media(media)
@@ -125,17 +120,8 @@ class S3Client(StorageClient):
             response = read_file_info(client=self, key=f"{self._prefix}/{file_path}" if self._prefix else file_path)
         except PermissionError as error:
             logging.error(f"Permission error while reading file info for s3://{self._bucket}/{self._prefix}: {error}")
-            try:
-                response = read_file_attributes(client=self, key=f"{self._prefix}/{file_path}" if self._prefix else file_path)
-                duration = clock_gettime_ns(CLOCK_MONOTONIC) - start_time
-                return (
-                    file_name, file_type, response["ObjectSize"], response["LastModified"].timestamp(),
-                    response["ETag"].strip('"'), duration
-                )
-            except PermissionError as error:
-                duration = clock_gettime_ns(CLOCK_MONOTONIC) - start_time
-                logging.error(f"Permission error while reading file attributes for s3://{self._bucket}/{self._prefix}: {error}")
-                return file_name, file_type, 1, 0.0, "unknown-no-access", duration
+            duration = clock_gettime_ns(CLOCK_MONOTONIC) - start_time
+            return file_name, file_type, 1, 0.0, "", duration
 
         duration = clock_gettime_ns(CLOCK_MONOTONIC) - start_time
         logging.debug(f"read_file_info for s3://{self._bucket}/{self._prefix}/{file_path} in {duration / 1E9:.2f} sec. got {response}")
