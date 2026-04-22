@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import logging
+import sys
 from functools import wraps
 from time import CLOCK_MONOTONIC, clock_gettime_ns, sleep
 from typing import Any, Callable
 
-import boto3  # type: ignore
-from botocore.exceptions import ClientError  # type: ignore
+if "pytest" not in sys.modules:
+    import boto3  # type: ignore
+    from botocore.exceptions import ClientError  # type: ignore
 
 from file_manager.storage_client import StorageClient
 
@@ -61,6 +63,10 @@ class S3Client(StorageClient):
         self.set_client()
 
     def set_client(self):
+        if "pytest" in sys.modules:
+            self.session_client = None
+            logging.info(f"Mock S3 client created for bucket {self._bucket}")
+            return
         new_session = boto3.Session()
         credentials = new_session.get_credentials()
         self.session_client = new_session.client("s3")
