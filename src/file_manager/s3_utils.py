@@ -23,9 +23,9 @@ def retry_decorator(func: Callable) -> Callable:
         while True:
             try:
                 return func(*args, **kwargs)
-            except ClientError:
+            except ClientError as e:
                 _retry_count += 1
-                logging.warning(f"{func.__name__} failed for with args {args}, {kwargs} retry {_retry_count} with new client...")
+                logging.warning(f"{func.__name__} failed for with args {args}, {kwargs} dur to:\n{e}\nRetry {_retry_count} with new client...")
                 kwargs["client"].set_client()
                 if _retry_count > 1:
                     sleep(_CLIENT_RETRY_TIMEOUT)
