@@ -135,7 +135,7 @@ class S3Client(StorageClient):
             except PermissionError as error:
                 duration = clock_gettime_ns(CLOCK_MONOTONIC) - start_time
                 logging.error(f"Permission error while reading file attributes for s3://{self._bucket}/{self._prefix}: {error}")
-                return file_name, file_type, 0, 0.0, "unknown-no-access", duration
+                return file_name, file_type, 1, 0.0, "unknown-no-access", duration
 
         duration = clock_gettime_ns(CLOCK_MONOTONIC) - start_time
         logging.debug(f"read_file_info for s3://{self._bucket}/{self._prefix}/{file_path} in {duration / 1E9:.2f} sec. got {response}")
