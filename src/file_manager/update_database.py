@@ -43,6 +43,12 @@ def main(argv: Any=[]) -> None:
         help="Database file",
         required=False,
         default=DEFAULT_DATABASE)
+    arg_parser.add_argument(
+        "--aws-profile",
+        type=str,
+        help="AWS profile to use for S3 access, if not specified will use default profile",
+        required=False,
+        default='default')
     os_cpu_count = os.cpu_count()
     default_threads = os_cpu_count // 4 if os_cpu_count else DEFAULT_MAX_FILE_UPDATE_THREADS
     arg_parser.add_argument("-t", "--threads",
@@ -61,7 +67,7 @@ def main(argv: Any=[]) -> None:
 
     rehash_time = time.time() - args.rehash_interval * 24 * 3600
     with FileDatabaseUpdater(
-          args.database, rehash_time, args.threads, get_storage_client(args.media)) as file_db:
+          args.database, rehash_time, args.threads, get_storage_client(args.media, args.aws_profile)) as file_db:
         file_db.update_dir(max_depth=args.max_depth)
         file_db.handle_orfans(clear_orfan_files=args.clear_orfan_files)
 

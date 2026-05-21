@@ -62,12 +62,13 @@ def read_file_info(client: S3Client, key: str) -> Any:
 
 
 class S3Client(StorageClient):
-    def __init__(self, media: str) -> None:
+    def __init__(self, media: str, profile: str) -> None:
+        self.profile = profile
         self.set_media(media)
         self.set_client()
 
     def set_client(self):
-        new_session = boto3.Session()
+        new_session = boto3.Session(profile_name=self.profile)
         credentials = new_session.get_credentials()
         self.session_client = new_session.client("s3")
         logging.info(f"Created new S3 client for bucket {self._bucket} with access key {credentials.access_key}")
