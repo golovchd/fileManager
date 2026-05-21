@@ -199,6 +199,9 @@ def parse_arguments() -> argparse.Namespace:
         "-e", "--etag", type=str, default="", help="ETag to compare with, if not specified will be calculated from file content")
 
     args = arg_parser.parse_args()
+    if not hasattr(args, "cmd_name"):
+        arg_parser.error(f"You have to specify command to run, available commands are: {', '.join(subparsers.choices.keys())}")
+
     if args.cmd_name in disk_required and not args.disk:
         arg_parser.error(f"-d DISK argument is required for {args.cmd_name}")
 
