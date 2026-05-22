@@ -25,6 +25,7 @@ def main(argv: Any=[]) -> None:
         description="Load files to database")
     arg_parser.add_argument("--media", type=str,
                             help="Media to import files from",
+                            required=True,
                             default=None)
     arg_parser.add_argument(
         "--max_depth",
