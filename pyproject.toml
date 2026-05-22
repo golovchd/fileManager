@@ -14,6 +14,7 @@ dependencies = [
     "ExifRead==3.5.1",
     "PyYAML==6.0.3",
     "boto3>=1.42.66",
+    "botocore>=1.42.66",
 ]
 
 [project.scripts]
