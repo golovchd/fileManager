@@ -7,17 +7,18 @@ import logging
 import os
 import re
 import sys
-from datetime import datetime, timedelta
+from datetime import MINYEAR, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import exifread  # type: ignore
 
-from file_manager.file_utils import get_lsblk, get_storages
+from file_manager.file_utils import generate_file_sha1, get_lsblk, get_storages
 from file_manager.import_config import ImportConfig, MediaConfig, MediaType
 from file_manager.utils import float2timestamp, timeobj2exif_str
 
 _COMPARE_TIME_DIFF = timedelta(2)  # 2 days
+_MAX_SIZE_DIFF = 1024 * 150
 _DEFAULT_CONFIG = Path(__file__).absolute().parents[2] / "import_config.yaml"
 
 _FILE_DATETIME_CACHE : dict[str, datetime] = {}
@@ -41,12 +42,14 @@ def exif_time2unix(exif_time_str: str) -> datetime:
     if len(exif_time_str) != 19:
         raise ExifTimeError(f'unexpectef ExifTime {exif_time_str}')
     exif_time_str = exif_time_str.replace(' ', ':', 1)
+    exif_time_str = exif_time_str.replace('T', ':', 1)
+    exif_time_str = exif_time_str.replace('-', ':', 2)
     exif_time_parts = exif_time_str.split(':')
     if len(exif_time_parts) != 6:
         raise ExifTimeError(f'unexpectef ExifTime {exif_time_str}')
-    return datetime(int(exif_time_parts[0]),
-                    int(exif_time_parts[1]),
-                    int(exif_time_parts[2]),
+    return datetime(int(exif_time_parts[0]) or MINYEAR,
+                    int(exif_time_parts[1]) or 1,
+                    int(exif_time_parts[2]) or 1,
                     int(exif_time_parts[3]),
                     int(exif_time_parts[4]),
                     int(exif_time_parts[5]))
@@ -61,7 +64,7 @@ def read_file_time(file_path: Path, exif_only: bool=False) -> datetime:
     if file_type_from_name(file_path) in MediaFiles.default_types['photo']:
         with open(file_path, 'rb') as file_obj:
             tags = exifread.process_file(file_obj, details=False)
-            logging.debug(f"{file_path} tags {tags}")
+            # logging.debug(f"{file_path} tags {tags}")
 
         file_time = tags.get('EXIF DateTimeOriginal', tags.get('Image DateTime', None))
     if not file_time:
@@ -105,17 +108,21 @@ def compare_files(file_name_1: str, dir_path_1: Path, dir_path_2: Path, file_nam
     stat_1 = os.stat(file_path_1)
     stat_2 = os.stat(file_path_2)
     if file_type not in MediaFiles.default_types['photo']:
-        logging.debug(f"{file_name_1} not a photo, match by size")
-        return stat_1.st_size == stat_2.st_size
+        logging.debug(f"{file_name_1} not a photo, match by size and SHA1")
+        return stat_1.st_size == stat_2.st_size and generate_file_sha1(file_path_1)[0] == generate_file_sha1(file_path_2)[0]
 
-    if stat_1.st_size != stat_2.st_size:
+    size_diff = abs(stat_1.st_size - stat_2.st_size)
+    if size_diff:
         message = "Size diff,"
     else:
         message = "Size match,"
-    if stat_1.st_mtime == stat_2.st_mtime:
-        logging.debug(
+    if stat_1.st_mtime and stat_1.st_mtime == stat_2.st_mtime:
+        logging.warning(
             f"{file_path_1},{file_path_2} {message}, mtime match in locations")
         return True
+
+    if size_diff > _MAX_SIZE_DIFF:
+        return False
 
     exif_time_1 = read_file_time(file_path_1, True)
     mtime_2 = float2timestamp(stat_2.st_mtime)
@@ -250,7 +257,7 @@ class MediaFiles:
     def find_file_on_media(self, file_name: str, file_path: Path,
                            only_same_names: bool=True, find_all:bool=False):
         """Looks for file_name on current media.
-          Reterning path to found copy. Order is not guaranteed.
+          Returning path to found copy. Order is not guaranteed.
 
         Args:
           file_name: name of tested file.
@@ -290,7 +297,8 @@ class MediaFiles:
 
 
 def get_import_list(
-        media_root: Path, storage_root: Path, storage_dirs_filter: list[str]
+        media_root: Path, storage_root: Path, storage_dirs_filter: list[str],
+        only_same_names: bool
         ) -> tuple[list[Path], dict[str, Path]]:
     """Generating list of files to import.
 
@@ -321,7 +329,7 @@ def get_import_list(
     for file_path, file_name in media:
         count += 1
         logging.info(f"Processing {file_name} {count}/{media.count}")
-        storage_dir = storage.find_file_on_media(file_name, file_path)
+        storage_dir = storage.find_file_on_media(file_name, file_path, only_same_names=only_same_names)
         file_datetime = read_file_time(Path(file_path) / file_name)
         if storage_dir:
             present_count += 1
@@ -351,7 +359,11 @@ def get_media_list(
     media_list = {}
     for device_info in get_lsblk():
         for config  in media_config.values():
-            if device_info["mountpoint"] and config.label.match(Path(device_info["mountpoint"]).name):
+            if not device_info["mountpoint"]:
+                continue
+            if (config.label.match(Path(device_info["mountpoint"]).name) or
+                device_info["uuid"] and config.label.match(device_info["uuid"])
+                or device_info["label"] and config.label.match(device_info["label"])):
                 media_list[Path(device_info["mountpoint"])] = config
                 break
     return media_list
@@ -378,7 +390,7 @@ def import_action(args: argparse.Namespace) -> int:
         files_to_import: list[Path] = []
         for media in media_list:
             files_to_import.extend(get_import_list(
-                media, storage, [] if args.check_entire_storage else config.import_roots_list)[0])
+                media, storage, [] if args.check_entire_storage else config.import_roots_list, args.check_only_same_names)[0])
         logging.info(f"Import to {storage}: {files_to_import}")
     return 0
 
@@ -414,6 +426,10 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
     arg_parser.add_argument(
         '--check-entire-storage',
         help='Load data from entire storage, not only from Photos/Videos locations',
+        action="store_true", default=False)
+    arg_parser.add_argument(
+        '--check-only-same-names',
+        help='Check file matching on storage with only files that the same names as on media',
         action="store_true", default=False)
     arg_parser.add_argument('-v', '--verbose',
                             help='Print verbose output',

@@ -23,7 +23,7 @@ storage-config:
       - "Data/Videos/"
 media-config:
   - name: photo-disk
-    label: ^disk$
+    label: ^DISK$
     types:
       - photos
       - videos
