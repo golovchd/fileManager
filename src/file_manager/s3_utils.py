@@ -62,15 +62,16 @@ def read_file_info(client: S3Client, key: str) -> Any:
 
 
 class S3Client(StorageClient):
-    def __init__(self, media: str, profile: str) -> None:
+    def __init__(self, media: str, profile: str, s3_endpoint_url: str) -> None:
         self.profile = profile
+        self.s3_endpoint_url = s3_endpoint_url
         self.set_media(media)
         self.set_client()
 
     def set_client(self):
         new_session = boto3.Session(profile_name=self.profile)
         credentials = new_session.get_credentials()
-        self.session_client = new_session.client("s3")
+        self.session_client = new_session.client("s3", endpoint_url=self.s3_endpoint_url)
         logging.info(f"Created new S3 client for bucket {self._bucket} with access key {credentials.access_key}")
 
     def is_symlink(self, path: str = '') -> bool:
