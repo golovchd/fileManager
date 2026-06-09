@@ -9,9 +9,9 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 TEST_DATA_DIR = SCRIPT_DIR.parent / "test_data"
 
 from file_manager.file_utils import PARTSIZES_DEFAULTS  # type: ignore
-from file_manager.file_utils import (FsClient, calc_etag, check_etag,
-                                     convert_to_bytes, factor_of_1MB,
-                                     generate_file_sha1, get_confirmation,
+from file_manager.file_utils import (FsClient, calc_etag, calc_sha1,
+                                     check_etag, convert_to_bytes,
+                                     factor_of_1MB, get_confirmation,
                                      get_full_dir_path, get_mount_path,
                                      get_path_disk_info, get_path_from_mount,
                                      get_possible_etags, get_storages,
@@ -148,14 +148,14 @@ def test_read_dir(test_path, expected_files, expected_dirs):
     assert sorted(sub_dirs) == sorted(expected_dirs)
 
 
-def test_generate_file_sha1():
+def test_calc_sha1():
     for file_path in TEST_DATA_DIR.glob("**/*"):
         print(f"Testing {file_path}")
         if file_path.is_dir():
             continue
         sha1_hash = sha1()
         sha1_hash.update(file_path.read_bytes())
-        file_sha, _ = generate_file_sha1(file_path, 1024)
+        file_sha = calc_sha1(file_path, 1024)
         assert file_sha == sha1_hash.hexdigest()
 
 

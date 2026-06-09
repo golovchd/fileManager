@@ -104,24 +104,29 @@ def get_path_disk_info(dir_path: Path) -> dict[str, Any]:
     raise ValueError(f"Failed to locate device for path {dir_path}")
 
 
-def generate_file_sha1(
-        file_path: Path, blocksize: int = 2**20) -> tuple[str, int]:
-    """Safe way to get SHA1 for big files."""
+def calc_sha1(file_path: Path, blocksize: int = 2**20) -> str:
     sha1_hash = hashlib.sha1()
+    with open(file_path, 'rb') as file_handler:
+        while True:
+            buffer = file_handler.read(blocksize)
+            if not buffer:
+                break
+            sha1_hash.update(buffer)
+    return sha1_hash.hexdigest()
+
+
+def generate_file_hash(file_path: Path, get_etag: bool = False) -> tuple[str, int]:
+    """Safe way to get SHA1 for big files."""
+
     start_time = clock_gettime_ns(CLOCK_MONOTONIC)
     try:
-        with open(file_path, 'rb') as file_handler:
-            while True:
-                buffer = file_handler.read(blocksize)
-                if not buffer:
-                    break
-                sha1_hash.update(buffer)
+        file_hash = calc_etag(file_path, PARTSIZES_DEFAULTS[0]) if get_etag else calc_sha1(file_path)
     except PermissionError:
         logging.warning(
-                f"generate_file_sha1 missing permission to read {file_path}")
+                f"generate_file_hash missing permission to read {file_path}")
         return "", 0
     except OSError:
-        logging.exception(f"generate_file_sha1 failed to read {file_path}")
+        logging.exception(f"generate_file_hash failed to read {file_path}")
         return "", 0
     file_size = file_path.stat().st_size
     duration = clock_gettime_ns(CLOCK_MONOTONIC) - start_time
@@ -129,11 +134,11 @@ def generate_file_sha1(
     logging.debug(f"{file_path} size {file_size / 1E6:.2f} MB "
                   f"process time {duration / 1E9:.2f} sec. "
                   f"SHA1 hashing speed {mb_per_second:.2f} MB/sec.")
-    return sha1_hash.hexdigest(), duration
+    return file_hash, duration
 
 
 def read_file(
-        file_path: Path, get_sha1: bool
+        file_path: Path, get_hash: bool, get_etag: bool = False
         ) -> tuple[str, str, int, float, str, int]:
     """Returns name, type, size, mtime, sha1 of file."""
     file_stat = file_path.stat()
@@ -145,8 +150,8 @@ def read_file(
     else:
         file_type = ""
     sha1_hex, hash_time = "", 0
-    if get_sha1:
-        sha1_hex, hash_time = generate_file_sha1(file_path)
+    if get_hash:
+        sha1_hex, hash_time = generate_file_hash(file_path, get_etag=get_etag)
     return (
         file_name, file_type, file_stat.st_size, file_stat.st_mtime,
         sha1_hex, hash_time
@@ -220,8 +225,9 @@ def get_storages(
 
 
 class FsClient(StorageClient):
-    def __init__(self, media: str) -> None:
+    def __init__(self, media: str, etag: bool = False) -> None:
         super().__init__(media)
+        self.etag = etag
         self.cur_path = get_full_dir_path(Path(media))
         disk_info = get_path_disk_info(self.cur_path)
         self._disk_uuid = disk_info["uuid"]
@@ -273,4 +279,4 @@ class FsClient(StorageClient):
             return [], []
 
     def read_file_info(self, file_path: str, get_hash: bool = False) -> tuple[str, str, int, float, str, int]:
-        return read_file(self.cur_path / file_path, get_sha1=get_hash)
+        return read_file(self.cur_path / file_path, get_hash, get_etag=self.etag)
