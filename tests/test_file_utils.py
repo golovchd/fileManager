@@ -155,7 +155,7 @@ def test_calc_sha1():
             continue
         sha1_hash = sha1()
         sha1_hash.update(file_path.read_bytes())
-        file_sha, _ = calc_sha1(file_path, 1024)
+        file_sha = calc_sha1(file_path, 1024)
         assert file_sha == sha1_hash.hexdigest()
 
 

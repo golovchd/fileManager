@@ -99,7 +99,8 @@ def test_update_file_skip_hashed(tmp_path: Path) -> None:
 
 
 def test_update_file_skip_failed_to_hash(tmp_path: Path, mocker) -> None:
-    mocker.patch("file_manager.file_utils.generate_file_hash", lambda _: ("", 0))
+    mock_func = lambda f, get_etag=False: ("", 0)
+    mocker.patch("file_manager.file_utils.generate_file_hash", mock_func)
     storage_client = FsClient(str(TEST_DATA_DIR))
     with FileDatabaseUpdater(tmp_path / _TEST_DB_NAME, time.time(), 1, storage_client) as db:
         db._cur_dir_id = 5

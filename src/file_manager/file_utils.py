@@ -151,7 +151,7 @@ def read_file(
         file_type = ""
     sha1_hex, hash_time = "", 0
     if get_hash:
-        sha1_hex, hash_time = generate_file_hash(file_path, get_etag)
+        sha1_hex, hash_time = generate_file_hash(file_path, get_etag=get_etag)
     return (
         file_name, file_type, file_stat.st_size, file_stat.st_mtime,
         sha1_hex, hash_time
