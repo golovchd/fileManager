@@ -13,7 +13,7 @@ from typing import Any
 
 import exifread  # type: ignore
 
-from file_manager.file_utils import generate_file_sha1, get_lsblk, get_storages
+from file_manager.file_utils import generate_file_hash, get_lsblk, get_storages
 from file_manager.import_config import ImportConfig, MediaConfig, MediaType
 from file_manager.utils import float2timestamp, timeobj2exif_str
 
@@ -109,7 +109,7 @@ def compare_files(file_name_1: str, dir_path_1: Path, dir_path_2: Path, file_nam
     stat_2 = os.stat(file_path_2)
     if file_type not in MediaFiles.default_types['photo']:
         logging.debug(f"{file_name_1} not a photo, match by size and SHA1")
-        return stat_1.st_size == stat_2.st_size and generate_file_sha1(file_path_1)[0] == generate_file_sha1(file_path_2)[0]
+        return stat_1.st_size == stat_2.st_size and generate_file_hash(file_path_1)[0] == generate_file_hash(file_path_2)[0]
 
     size_diff = abs(stat_1.st_size - stat_2.st_size)
     if size_diff:
