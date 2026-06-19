@@ -5,7 +5,7 @@ from file_manager.s3_utils import S3Client
 from file_manager.storage_client import StorageClient
 
 
-def get_storage_client(media: str) -> StorageClient:
+def get_storage_client(media: str, profile: str, s3_endpoint_url: str, etag: bool) -> StorageClient:
     if media.startswith("s3://"):
-        return S3Client(media)
-    return FsClient(media)
+        return S3Client(media, profile, s3_endpoint_url)
+    return FsClient(media, etag)

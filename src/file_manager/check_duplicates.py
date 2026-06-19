@@ -16,7 +16,7 @@ from file_manager.duplicates_cleanup import (ALLOWED_ACTIONS,
                                              RIGHT_DIR_KEEP_ACTION,
                                              SKIP_ACTION, DuplicatesCleanup)
 from file_manager.file_database import DEFAULT_DATABASE, FileManagerDatabase
-from file_manager.file_utils import generate_file_sha1
+from file_manager.file_utils import generate_file_hash
 from file_manager.utils import print_table
 
 DEFAULT_MIN_SIZE = 1000000  # 1 MB
@@ -496,7 +496,7 @@ class FileDuplicates(FileManagerDatabase):
     def get_file_hash(self, fsrecord_id: int) -> str:
         if fsrecord_id in self.checked_hashes:
             return self.checked_hashes[fsrecord_id]
-        self.checked_hashes[fsrecord_id], _ = generate_file_sha1(
+        self.checked_hashes[fsrecord_id], _ = generate_file_hash(
                 self.mountpoint / self.get_path(fsrecord_id))
         return self.checked_hashes[fsrecord_id]
 
