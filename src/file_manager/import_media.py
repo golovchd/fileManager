@@ -9,6 +9,7 @@ import re
 import sys
 from datetime import MINYEAR, datetime, timedelta
 from pathlib import Path
+from time import CLOCK_MONOTONIC, clock_gettime_ns
 from typing import Any
 
 import exifread  # type: ignore
@@ -60,6 +61,7 @@ def read_file_time(file_path: Path, exif_only: bool=False) -> datetime:
     if str(file_path) in _FILE_DATETIME_CACHE:
         return _FILE_DATETIME_CACHE[str(file_path)]
 
+    start_time = clock_gettime_ns(CLOCK_MONOTONIC)
     file_time = None
     if file_type_from_name(file_path) in MediaFiles.default_types['photo']:
         with open(file_path, 'rb') as file_obj:
@@ -71,12 +73,14 @@ def read_file_time(file_path: Path, exif_only: bool=False) -> datetime:
         if exif_only:
             raise ExifTimeError(f"unable to read ExifTime from {file_path}")
         file_timestamp = float2timestamp(file_path.stat().st_mtime)
+        duration = clock_gettime_ns(CLOCK_MONOTONIC) - start_time
         logging.debug(
             f"{file_path} mtime as file_time "
-            f"{timeobj2exif_str(file_timestamp)}")
+            f"{timeobj2exif_str(file_timestamp)}, read_file_time duration {duration / 1E9:.2f} sec.")
     else:
         file_timestamp = exif_time2unix(str(file_time))
-        logging.debug(f"{file_path} exif as file_time {file_time}")
+        duration = clock_gettime_ns(CLOCK_MONOTONIC) - start_time
+        logging.debug(f"{file_path} exif as file_time {file_time}, read_file_time duration {duration / 1E9:.2f} sec.")
     _FILE_DATETIME_CACHE[str(file_path)] = file_timestamp
     return file_timestamp
 
@@ -118,7 +122,7 @@ def compare_files(file_name_1: str, dir_path_1: Path, dir_path_2: Path, file_nam
         message = "Size match,"
     if stat_1.st_mtime and stat_1.st_mtime == stat_2.st_mtime:
         logging.warning(
-            f"{file_path_1},{file_path_2} {message}, mtime match in locations")
+            f"{file_path_1},{file_path_2} {message} mtime match in locations")
         return True
 
     if size_diff > _MAX_SIZE_DIFF:
