@@ -21,7 +21,7 @@ def list_dir_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     """Listing directory."""
     try:
         file_db.list_dir(
-            args.disk, args.dir_path, args.recursive, summary=args.summary, print_sha=args.print_sha)
+            args.disk, args.dir_path, args.recursive, summary=args.summary, print_sha=args.print_sha, max_depth=args.max_depth)
         return 0
     except ValueError:
         print(f"Failed to find dir path {args.dir_path} on drive {args.disk}")
@@ -125,6 +125,8 @@ def parse_arguments() -> argparse.Namespace:
     list_dir.add_argument("dir_path", type=str, help="Path to dir to list")
     list_dir.add_argument(
         "-r", "--recursive", help="List dir recursively", action="store_true")
+    list_dir.add_argument(
+        "-m", "--max-depth", help="Max depth to display recursive tree", type=int)
     output_format = list_dir.add_mutually_exclusive_group()
     output_format.add_argument(
         "-s", "--summary", help="Print only summary", action="store_true")

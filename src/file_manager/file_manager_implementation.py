@@ -77,6 +77,8 @@ class FileUtils(FileManagerDatabase):
     def __init__(
             self, db_path: Path):
         super().__init__(db_path, 0)
+        # Cache for _get_dir_content()
+        self._dir_content: dict[int, tuple[list[tuple[int, str, float, float, int, int, str]], int, int, int]] = {}
 
     def query_disks(
             self, filter: str,
@@ -187,7 +189,13 @@ class FileUtils(FileManagerDatabase):
         for row in self._exec_query(_UNIQUE_FILES_SIZE, (), commit=False):
             print(f"Total size of unique files is {row[0]} MiB")
 
-    def _get_dir_content(self, dir_id: int, sort_index: int = -1) -> tuple[list[tuple[int, str, float, float, int, int, str]], int, int, int]:
+    def get_dir_size(self, dir_id) -> tuple[int, int, int]:
+        if dir_id in self._dir_content:
+            dir_content = self._dir_content[dir_id]
+            return dir_content[1], dir_content[2], dir_content[3]
+        return 0, 0, 0
+
+    def _get_dir_content(self, dir_id: int, sort_index: int = -1, recursive: bool = False) -> tuple[list[tuple[int, str, float, float, int, int, str]], int, int, int]:
         """Returns list dir elements as first element, size of files in dir, count of files and subdirs as a tuple:
             0: `fsrecords`.`ROWID`
             1: `fsrecords`.`Name`
@@ -198,6 +206,9 @@ class FileUtils(FileManagerDatabase):
             6: `SHA1`
             dir_content list sorted by sort_index and name if possible
         """
+        if dir_id in self._dir_content:
+            return self._dir_content[dir_id]
+
         dir_content = []
         dir_size = 0
         files_count = 0
@@ -212,39 +223,51 @@ class FileUtils(FileManagerDatabase):
                 subdir_count += 1
         if dir_content and sort_index != -1 and sort_index < len(dir_content[0]):
             dir_content.sort(key=lambda x: x[sort_index] or f" {x[1]}")
-        return (dir_content, dir_size, files_count, subdir_count)
+        if recursive:
+            for record in dir_content:
+                if record[5] is not None:
+                    continue
+                _, subdir_size, subdir_files_count, subdir_subdir_count = self._get_dir_content(record[0], sort_index, recursive=True)
+                dir_size += subdir_size
+                files_count += subdir_files_count
+                subdir_count += subdir_subdir_count
+        self._dir_content[dir_id] = (dir_content, dir_size, files_count, subdir_count)
+        return self._dir_content[dir_id]
 
     def list_dir(
                 self, disk: str, dir_path: str, recursive: bool,
-                summary: bool = False, only_count: bool = False, print_sha: bool = False
+                summary: bool = False, only_count: bool = False, print_sha: bool = False, max_depth: int | None = None
             ) -> tuple[int, int, int]:
+        if max_depth is not None and max_depth <= 0:
+            only_count = True
         self.set_disk_by_name(disk)
         self._cur_dir_id = self.get_dir_id(
             dir_path.split("/"), insert_dirs=False)
         logging.debug(
             f"Listing dir {self.disk_name}/{dir_path} id={self._cur_dir_id}")
 
-        dir_content, dir_size, files_count, subdir_count = self._get_dir_content(self._cur_dir_id, sort_index=1)
+        dir_content, dir_size, files_count, subdir_count = self._get_dir_content(
+            self._cur_dir_id, sort_index=1, recursive=recursive or summary)
 
         if not (summary or only_count):
-            print_dir_content(dir_path, dir_content, print_sha)
+            print_dir_content(dir_path, dir_content, print_sha, self if recursive else None)
 
         if not only_count and (not recursive or subdir_count and not summary):
-            suffix = " (not counted)" if subdir_count else ""
+            suffix = " (not counted)" if not (recursive or summary) else ""
             print(f"Size of files in {dir_path} is {dir_size}B, contains "
-                  f"{files_count} files and {subdir_count} subdirs {suffix}")
-        if not recursive:
+                f"{files_count} files and {subdir_count} subdirs{suffix}")
+
+        if not recursive or max_depth is not None and max_depth <= 1:
             return dir_size, files_count, subdir_count
 
         for record in dir_content:
             if record[5] is not None:
                 continue
-            subdir_size, subdir_files_count, subdir_dirs_count = self.list_dir(
+            self.list_dir(
                 disk, f"{dir_path}/{record[1]}", True,
-                only_count=summary or only_count)
-            dir_size += subdir_size
-            files_count += subdir_files_count
-            subdir_count += subdir_dirs_count
+                only_count=summary or only_count,
+                max_depth=max_depth-1 if max_depth is not None else None
+            )
         if not only_count:
             print(f"Size of files in {dir_path} with subdirs is {dir_size} B, "
                   f"contains {files_count} files and {subdir_count} subdirs")
@@ -509,7 +532,14 @@ class FileUtils(FileManagerDatabase):
         return 0
 
 
-def print_dir_content(dir_path: str, dir_content: list[tuple[int, str, float, float, int, int, str]], print_sha: bool) -> None:
+def print_dir_content(dir_path: str, dir_content: list[tuple[int, str, float, float, int, int, str]], print_sha: bool, file_utils: FileUtils | None = None) -> None:
+    if file_utils is None:
+        print_dir_content_short(dir_path, dir_content, print_sha)
+    else:
+        print_dir_content_with_sizes(dir_path, dir_content, print_sha, file_utils)
+
+
+def print_dir_content_short(dir_path: str, dir_content: list[tuple[int, str, float, float, int, int, str]], print_sha: bool) -> None:
     headers = ["Name", "Size", "File Date", "Hash Date"]
     if print_sha:
         headers.append("SHA1")
@@ -525,6 +555,37 @@ def print_dir_content(dir_path: str, dir_content: list[tuple[int, str, float, fl
     print(f"Listing dir: {dir_path}")
     print_table(
         dir_content, headers, indexes=indexes,
+        formats=formats, aligns=aligns)
+
+
+def print_dir_content_with_sizes(dir_path: str, dir_content: list[tuple[int, str, float, float, int, int, str]], print_sha: bool, file_utils: FileUtils) -> None:
+    headers = ["Name", "Size", "File Date", "Hash Date"]
+    indexes = [1, 5, 2, 3]
+    if print_sha:
+        headers.append("SHA1")
+        indexes.append(6)
+    headers.extend(["Dir Size", "File Count", "Subdir Count"])
+    indexes.extend([7, 8, 9])
+    print_data = []
+    for record in dir_content:
+        if record[5] is not None:
+            print_data.append([*record, '', '', ''])
+        else:
+            print_data.append([*record, *file_utils.get_dir_size(record[0])])
+    formats: list[Callable] = [
+        str,
+        lambda x: str(x) if x else "dir",
+        timestamp2exif_str,
+        timestamp2exif_str,
+        str,
+        str,
+        str,
+        str,
+    ]
+    aligns = ["<", ">", ">", ">", ">", ">", ">", ">"]
+    print(f"Listing dir: {dir_path}")
+    print_table(
+        print_data, headers, indexes=indexes,
         formats=formats, aligns=aligns)
 
 
