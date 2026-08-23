@@ -238,6 +238,9 @@ class FileUtils(FileManagerDatabase):
                 self, disk: str, dir_path: str, recursive: bool,
                 summary: bool = False, only_count: bool = False, print_sha: bool = False, max_depth: int | None = None
             ) -> tuple[int, int, int]:
+        if summary:
+            recursive = False
+            max_depth = None
         if max_depth is not None and max_depth <= 0:
             only_count = True
         self.set_disk_by_name(disk)
