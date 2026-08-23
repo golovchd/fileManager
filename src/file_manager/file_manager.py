@@ -21,7 +21,7 @@ def list_dir_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     """Listing directory."""
     try:
         file_db.list_dir(
-            args.disk, args.dir_path, args.recursive, summary=args.summary, print_sha=args.print_sha)
+            args.disk, args.dir_path, args.recursive, summary=args.summary, print_sha=args.print_sha, max_depth=args.max_depth)
         return 0
     except ValueError:
         print(f"Failed to find dir path {args.dir_path} on drive {args.disk}")
@@ -123,13 +123,15 @@ def parse_arguments() -> argparse.Namespace:
         "list-dir", help="List directory with statistic")
     list_dir.set_defaults(func=list_dir_command, cmd_name="list-dir")
     list_dir.add_argument("dir_path", type=str, help="Path to dir to list")
-    list_dir.add_argument(
+    recursive_style = list_dir.add_mutually_exclusive_group()
+    recursive_style.add_argument(
+        "-s", "--summary", help="Print only summary for dir and all subdirs", action="store_true")
+    recursive_style.add_argument(
         "-r", "--recursive", help="List dir recursively", action="store_true")
-    output_format = list_dir.add_mutually_exclusive_group()
-    output_format.add_argument(
-        "-s", "--summary", help="Print only summary", action="store_true")
-    output_format.add_argument(
-        "-p", "--print-sha", help="Print SHA for each file", action="store_true")
+    list_dir.add_argument(
+        "-m", "--max-depth", help="Max depth to display recursive tree. Will be ignored with --summary", type=int)
+    list_dir.add_argument(
+        "-p", "--print-sha", help="Print SHA for each file. Will be ignored with --summary", action="store_true")
 
     diff = subparsers.add_parser(
         "diff", help="Diff <disk1>/<path1> vs <disk2>/<path2>")
