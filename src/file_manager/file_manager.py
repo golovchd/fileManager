@@ -8,7 +8,8 @@ from file_manager.file_database import DEFAULT_DATABASE
 from file_manager.file_manager_implementation import (SORT_OPTIONS,
                                                       SORT_OPTIONS_UNIQUE,
                                                       FileUtils)
-from file_manager.file_utils import check_etag, get_possible_etags
+from file_manager.file_utils import (NumbersFormat, check_etag,
+                                     get_possible_etags)
 
 
 def list_disks_command(file_db: FileUtils, args: argparse.Namespace) -> int:
@@ -43,7 +44,7 @@ def move_command(file_db: FileUtils, args: argparse.Namespace) -> int:
 
 
 def backups_count_command(file_db: FileUtils, args: argparse.Namespace) -> int:
-    return file_db.backups_count(args.disk, args.count_limit, args.parent_path)
+    return file_db.backups_count(args.disk, args.count_limit, args.parent_path, NumbersFormat.get_number_format(args))
 
 
 def update_disk_command(file_db: FileUtils, args: argparse.Namespace) -> int:
@@ -83,6 +84,11 @@ def parse_arguments() -> argparse.Namespace:
     )
     arg_parser.add_argument(
         "-v", "--verbose", help="Verbose output", action="store_true")
+    numned_format_group = arg_parser.add_mutually_exclusive_group()
+    numned_format_group.add_argument(
+        "-b", "--bytes", help="Output sizes in bytes", action="store_true")
+    numned_format_group.add_argument(
+        "-k", "--kibibytes", help="Output sizes KiB/MiB/GiB/TiB/PiB (1024-base) instead of default KB/MB/GB/TB/PB (1000-base)", action="store_true")
     arg_parser.add_argument(
         "--database",
         type=Path,

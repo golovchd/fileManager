@@ -7,7 +7,8 @@ from shutil import move
 from typing import Any, Callable
 
 from file_manager.file_database import FileManagerDatabase
-from file_manager.file_utils import convert_to_bytes, get_disk_info
+from file_manager.file_utils import (NumbersFormat, convert_to_bytes,
+                                     get_disk_info)
 from file_manager.utils import print_table, timestamp2exif_str
 
 SORT_OPTIONS = ["id", "uuid", "label", "file-count", "object-count", "disk-size", "files-size", "usage"]
@@ -99,7 +100,7 @@ class FileUtils(FileManagerDatabase):
         return disks
 
     def backups_count(
-            self, disk: str, count_limit: int, parent_path: str) -> int:
+            self, disk: str, count_limit: int, parent_path: str, numbers_format: NumbersFormat) -> int:
         self.set_disk_by_name(disk)
         extra_query = ""
         params = [count_limit, self._disk_id]
@@ -116,11 +117,11 @@ class FileUtils(FileManagerDatabase):
             files_list.append([
                 self.get_path(row[1]), row[0], row[7], row[3], row[8]])
         headers = [f"Path on disk {self._disk_label}",
-                   "Name", "File Size, B", "File Date", "File SHA1"]
+                   "Name", "File Size", "File Date", "File SHA1"]
         formats: list[Callable] = [
             str,
             str,
-            str,
+            numbers_format.get_formatter(),
             timestamp2exif_str,
             str
         ]
