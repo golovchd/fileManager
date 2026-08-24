@@ -8,11 +8,13 @@ import logging
 import re
 import subprocess
 import sys
+from argparse import Namespace
+from enum import Enum
 from hashlib import md5
 from os import statvfs
 from pathlib import Path
 from time import CLOCK_MONOTONIC, clock_gettime_ns
-from typing import Any
+from typing import Any, Callable
 
 from file_manager.storage_client import StorageClient
 
@@ -34,6 +36,47 @@ PARTSIZES_DEFAULTS : list[int] = [ ## Default Partsizes Map (bytes)
   8388608, # aws_cli/boto3
   15728640, # s3cmd
 ]
+
+
+class NumbersFormat(Enum):
+    BYTES = 1
+    KILOBYTES = 2
+    KIBIBYTES = 3
+
+    @classmethod
+    def get_number_format(cls, args: Namespace|None = None) -> NumbersFormat:
+        if args and hasattr(args, "kibibytes") and args.kibibytes:
+            return NumbersFormat.KIBIBYTES
+        if args and hasattr(args, "bytes") and args.bytes:
+            return NumbersFormat.BYTES
+        return NumbersFormat.KILOBYTES
+
+    def get_formatter(self) -> Callable:
+        if self.value == NumbersFormat.KILOBYTES.value:
+            return NumbersFormat.kilobytes_formatter
+        if self.value == NumbersFormat.KIBIBYTES.value:
+            return NumbersFormat.kibibytes_formatter
+        return NumbersFormat.bytes_formatter
+
+    @classmethod
+    def kilobytes_formatter(cls, byte_count: int) -> str:
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB', 'PB']:
+            if byte_count < 1000.0:
+                return f"{byte_count:.2f} {unit}"
+            byte_count /= 1000.0    # type: ignore[assignment]
+        return f"{byte_count:.2f} EB"
+
+    @classmethod
+    def kibibytes_formatter(cls, byte_count: int) -> str:
+        for unit in ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB']:
+            if byte_count < 1024.0:
+                return f"{byte_count:.2f} {unit}"
+            byte_count /= 1024.0    # type: ignore[assignment]
+        return f"{byte_count:.2f} EiB"
+
+    @classmethod
+    def bytes_formatter(cls, byte_count: int) -> str:
+        return f"{byte_count:,} B"
 
 
 def convert_to_bytes(size: str) -> int:

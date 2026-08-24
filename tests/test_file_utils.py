@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from hashlib import sha1
 from pathlib import Path
 
@@ -9,8 +10,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 TEST_DATA_DIR = SCRIPT_DIR.parent / "test_data"
 
 from file_manager.file_utils import PARTSIZES_DEFAULTS  # type: ignore
-from file_manager.file_utils import (FsClient, calc_etag, calc_sha1,
-                                     check_etag, convert_to_bytes,
+from file_manager.file_utils import (FsClient, NumbersFormat, calc_etag,
+                                     calc_sha1, check_etag, convert_to_bytes,
                                      factor_of_1MB, get_confirmation,
                                      get_full_dir_path, get_mount_path,
                                      get_path_disk_info, get_path_from_mount,
@@ -387,3 +388,37 @@ def test_have_enough_free_space(mount: str, free_space_limit: dict[str, int], ex
 )
 def test_get_storages(storage_regex_list: list[str], free_space_limit: dict[str, int], expected_result: bool) -> None:
     assert get_storages(storage_regex_list, free_space_limit) == expected_result
+
+@pytest.mark.parametrize(
+    "number, formatter, result",
+    [
+        (1024, NumbersFormat.KIBIBYTES, "1.00 KiB"),
+        (1024, NumbersFormat.KILOBYTES, "1.02 KB"),
+        (1024, NumbersFormat.BYTES, "1,024 B"),
+        (int(5.243784782 * 1024 ** 3), NumbersFormat.KIBIBYTES, "5.24 GiB"),
+        (int(3.45499999 * 1000 ** 4), NumbersFormat.KILOBYTES, "3.45 TB"),
+        (int(5.243784782 * 1024 ** 6), NumbersFormat.KIBIBYTES, "5.24 EiB"),
+        (int(3.45499999 * 1000 ** 6), NumbersFormat.KILOBYTES, "3.45 EB"),
+   ]
+)
+def test_numbers_format(number: int, formatter: NumbersFormat, result: str) -> None:
+    assert formatter.get_formatter()(number) == result
+
+@pytest.mark.parametrize(
+    "params, result",
+    [
+        (["-b"], NumbersFormat.BYTES),
+        (["--bytes"], NumbersFormat.BYTES),
+        (["-k"], NumbersFormat.KIBIBYTES),
+        (["--kibibytes"], NumbersFormat.KIBIBYTES),
+        ([], NumbersFormat.KILOBYTES),
+    ]
+)
+def test_get_number_format(params: list[str], result: NumbersFormat):
+    arg_parser = argparse.ArgumentParser()
+    numned_format_group = arg_parser.add_mutually_exclusive_group()
+    numned_format_group.add_argument(
+        "-b", "--bytes", help="Output sizes in bytes", action="store_true")
+    numned_format_group.add_argument(
+        "-k", "--kibibytes", help="Output sizes KiB/MiB/GiB/TiB/PiB (1024-base) instead of default KB/MB/GB/TB/PB (1000-base)", action="store_true")
+    assert NumbersFormat.get_number_format(arg_parser.parse_args(args=params)).value == result.value
