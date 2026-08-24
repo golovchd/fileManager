@@ -7,7 +7,7 @@ from shutil import move
 from typing import Any, Callable
 
 from file_manager.file_database import FileManagerDatabase
-from file_manager.file_utils import get_disk_info
+from file_manager.file_utils import convert_to_bytes, get_disk_info
 from file_manager.utils import print_table, timestamp2exif_str
 
 SORT_OPTIONS = ["id", "uuid", "label", "file-count", "object-count", "disk-size", "files-size", "usage"]
@@ -393,13 +393,13 @@ class FileUtils(FileManagerDatabase):
         if size:
             if size[0] in "-<":
                 extra_condition = f"{extra_condition} AND `FileSize` < ?"
-                params.append(size[1:])
+                params.append(str(convert_to_bytes(size[1:])))
             elif size[0] in "+>":
                 extra_condition = f"{extra_condition} AND `FileSize` > ?"
-                params.append(size[1:])
+                params.append(str(convert_to_bytes(size[1:])))
             else:
                 extra_condition = f"{extra_condition} AND `FileSize` = ?"
-                params.append(size)
+                params.append(str(convert_to_bytes(size)))
         matching_list = []
         for row in self._exec_query(
                 _FILD_SELECT.format(file="" if dir else "NOT ", extra_condition=extra_condition), params, commit=False):
