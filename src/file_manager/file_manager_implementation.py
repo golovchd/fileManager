@@ -269,9 +269,10 @@ class FileUtils(FileManagerDatabase):
             if record[5] is not None:
                 continue
             self.list_dir(
-                disk, f"{dir_path}/{record[1]}", True,
+                disk, f"{dir_path}/{record[1]}", True, numbers_format,
                 only_count=summary or only_count,
-                max_depth=max_depth-1 if max_depth is not None else None
+                max_depth=max_depth-1 if max_depth is not None else None,
+                print_sha=print_sha
             )
         if not only_count:
             print(f"Size of files in {dir_path} with subdirs is {size_formatter(dir_size)},"
@@ -554,7 +555,7 @@ def print_dir_content_short(dir_path: str, dir_content: list[tuple[int, str, flo
         lambda x: size_formatter(x) if x else "dir",
         timestamp2exif_str,
         timestamp2exif_str,
-        str
+        lambda x: str(x) if x else "",
     ]
     aligns = ["<", ">", ">", ">", "<"]
     print(f"Listing dir: {dir_path}")
@@ -582,11 +583,12 @@ def print_dir_content_with_sizes(dir_path: str, dir_content: list[tuple[int, str
         lambda x: size_formatter(x) if x else "dir",
         timestamp2exif_str,
         timestamp2exif_str,
+        lambda x: str(x) if x else "",
         str,
-        size_formatter,
         str,
         str,
     ]
+    formats[5 if print_sha else 4] = lambda x: size_formatter(x) if x else ""
     aligns = ["<", ">", ">", ">", ">", ">", ">", ">"]
     print(f"Listing dir: {dir_path}")
     print_table(
