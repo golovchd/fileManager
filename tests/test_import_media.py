@@ -7,11 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from file_manager.import_config import MediaConfig  # type: ignore
-from file_manager.import_media import ExifTimeError  # type: ignore
-from file_manager.import_media import (exif_time2unix, file_type_from_name,
-                                       get_import_list, get_media_list,
-                                       read_file_time)
+from file_manager.import_config import MediaConfig  # type: ignore[import]
+from file_manager.import_media import ExifTimeError  # type: ignore[import]
+from file_manager.import_media import (exif_time2unix, file_type_from_name,  # type: ignore[import]
+                                       get_import_list, get_media_list, read_file_time)
 
 TEST_SCRIPT_DIR = Path(__file__).resolve().parent
 TEST_DATA_DIR = TEST_SCRIPT_DIR.parent / "test_data"
