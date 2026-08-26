@@ -6,8 +6,7 @@ from pathlib import Path
 import pytest
 
 from file_manager.db_utils import DB_SCHEMA, create_db, dump_db
-from file_manager.file_database_update import (FileDatabaseUpdater,
-                                               IntegrityError)
+from file_manager.file_database_update import FileDatabaseUpdater, IntegrityError
 from file_manager.file_utils import FsClient
 from file_manager.storage_client import StorageClient
 

@@ -29,7 +29,7 @@ def print_table(
         footer: bool = False,
         ) -> None:
     column_count = len(headers)
-    column_sizes = [len(header) for header in headers]
+    column_sizes = [0] * column_count
     if not indexes:
         indexes = list(range(column_count))
     if not formats:
@@ -40,14 +40,20 @@ def print_table(
         for i in range(column_count):
             column_sizes[i] = max(
                 column_sizes[i], len(formats[i](row[indexes[i]])))
+    for i in range(column_count):
+        if column_sizes[i]:
+            column_sizes[i] = max(
+                            column_sizes[i], len(headers[i]))
     format_str = separator
     for i in range(column_count):
-        format_str += (f"{space}{{:{aligns[i]}{column_sizes[i]}}}"
-                       f"{space}{separator}")
-    print(format_str.format(*headers))
+        if column_sizes[i]:
+            format_str += (f"{space}{{:{aligns[i]}{column_sizes[i]}}}"
+                        f"{space}{separator}")
+    print_headers = [headers[i] for i in range(column_count) if column_sizes[i]]
+    print(format_str.format(*print_headers))
     for row in data:
         print_data = [formats[i](row[indexes[i]])
-                      for i in range(column_count)]
+                      for i in range(column_count) if column_sizes[i]]
         print(format_str.format(*print_data))
     if footer:
-        print(format_str.format(*headers))
+        print(format_str.format(*print_headers))

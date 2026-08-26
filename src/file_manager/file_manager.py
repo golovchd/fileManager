@@ -5,11 +5,8 @@ import logging
 from pathlib import Path
 
 from file_manager.file_database import DEFAULT_DATABASE
-from file_manager.file_manager_implementation import (SORT_OPTIONS,
-                                                      SORT_OPTIONS_UNIQUE,
-                                                      FileUtils)
-from file_manager.file_utils import (NumbersFormat, check_etag,
-                                     get_possible_etags)
+from file_manager.file_manager_implementation import SORT_OPTIONS, SORT_OPTIONS_UNIQUE, FileUtils
+from file_manager.file_utils import NumbersFormat, check_etag, get_possible_etags
 
 
 def list_disks_command(file_db: FileUtils, args: argparse.Namespace) -> int:
@@ -22,7 +19,8 @@ def list_dir_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     """Listing directory."""
     try:
         file_db.list_dir(
-            args.disk, args.dir_path, args.recursive, summary=args.summary, print_sha=args.print_sha, max_depth=args.max_depth)
+            args.disk, args.dir_path, args.recursive, NumbersFormat.get_number_format(args),
+            summary=args.summary, print_sha=args.print_sha, max_depth=args.max_depth)
         return 0
     except ValueError:
         print(f"Failed to find dir path {args.dir_path} on drive {args.disk}")

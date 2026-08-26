@@ -10,12 +10,10 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 TEST_DATA_DIR = SCRIPT_DIR.parent / "test_data"
 
 from file_manager.file_utils import PARTSIZES_DEFAULTS  # type: ignore
-from file_manager.file_utils import (FsClient, NumbersFormat, calc_etag,
-                                     calc_sha1, check_etag, convert_to_bytes,
-                                     factor_of_1MB, get_confirmation,
-                                     get_full_dir_path, get_mount_path,
-                                     get_path_disk_info, get_path_from_mount,
-                                     get_possible_etags, get_storages,
+from file_manager.file_utils import (FsClient, NumbersFormat, calc_etag, calc_sha1, check_etag,
+                                     convert_to_bytes, factor_of_1MB, get_confirmation,
+                                     get_full_dir_path, get_mount_path, get_path_disk_info,
+                                     get_path_from_mount, get_possible_etags, get_storages,
                                      have_enough_free_space, read_file)
 
 

@@ -5,7 +5,8 @@ from unittest.mock import call, patch
 
 import pytest
 
-from file_manager.utils import print_table, timestamp2exif_str
+from file_manager.utils import print_table  # type: ignore[import]
+from file_manager.utils import timestamp2exif_str
 
 
 @pytest.mark.parametrize(
@@ -55,10 +56,35 @@ from file_manager.utils import print_table, timestamp2exif_str
             "|",
             " ",
             [
-                call("| Name   | Size | File Date | Hash Date | SHA256 |"),
-                call("| Audio  |  dir |           |           |        |"),
-                call("| Backup |  dir |           |           |        |"),
-                call("| Books  |  dir |           |           |        |"),
+                call("| Name   | Size |"),
+                call("| Audio  |  dir |"),
+                call("| Backup |  dir |"),
+                call("| Books  |  dir |"),
+            ]
+        ),
+        (
+            [
+                [854367, "Audio", None, 100, 100, None, 100],
+                [854507, "Backup", None, 500, 10, None, None],
+                [2258266, "Books", None, 200, None, None, None],
+            ],
+            ["Name", "Size", "Dir Size", "File Count", "Subdir Count"],
+            [1, 5, 3, 4, 6],
+            [
+                str,
+                lambda x: str(x) if x else "dir",
+                lambda x: str(x) if x else "",
+                lambda x: str(x) if x else "",
+                lambda x: str(x) if x else "",
+            ],
+            ["<", ">", ">", ">", "<"],
+            "|",
+            " ",
+            [
+                call("| Name   | Size | Dir Size | File Count | Subdir Count |"),
+                call("| Audio  |  dir |      100 |        100 | 100          |"),
+                call("| Backup |  dir |      500 |         10 |              |"),
+                call("| Books  |  dir |      200 |            |              |"),
             ]
         ),
     ]

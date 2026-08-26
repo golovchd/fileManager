@@ -5,8 +5,9 @@ from typing import Any
 
 import pytest
 
-from file_manager.db_utils import create_db
-from file_manager.file_manager import FileUtils
+from file_manager.db_utils import create_db  # type: ignore[import]
+from file_manager.file_manager import FileUtils  # type: ignore[import]
+from file_manager.file_utils import NumbersFormat  # type: ignore[import]
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 TEST_DATA_DB_DIR = SCRIPT_DIR.parent / "test_db"
@@ -136,7 +137,7 @@ def test_list_dir(tmp_path: Path, disk: str, path: str, recursive: bool, result:
     reference_db_path = tmp_path / _TEST_DB_NAME
     create_db(reference_db_path, _DB_TEST_DB_1)
     with FileUtils(reference_db_path) as db:
-        assert db.list_dir(disk, path, recursive) == result
+        assert db.list_dir(disk, path, recursive, NumbersFormat.KILOBYTES) == result
 
 @pytest.mark.parametrize(
     "path1, path2, result",
