@@ -4,10 +4,8 @@ from typing import Dict
 
 import pytest
 
-from file_manager.duplicates_cleanup import (DIR_CLEANUP_RULES,
-                                             LEFT_DIR_KEEP_ACTION,
-                                             RIGHT_DIR_KEEP_ACTION,
-                                             SKIP_ACTION, DuplicatesCleanup)
+from file_manager.duplicates_cleanup import (DIR_CLEANUP_RULES, LEFT_DIR_KEEP_ACTION,
+                                             RIGHT_DIR_KEEP_ACTION, SKIP_ACTION, DuplicatesCleanup)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 

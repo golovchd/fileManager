@@ -7,8 +7,7 @@ from shutil import move
 from typing import Any, Callable
 
 from file_manager.file_database import FileManagerDatabase
-from file_manager.file_utils import (NumbersFormat, convert_to_bytes,
-                                     get_disk_info)
+from file_manager.file_utils import NumbersFormat, convert_to_bytes, get_disk_info
 from file_manager.utils import print_table, timestamp2exif_str
 
 SORT_OPTIONS = ["id", "uuid", "label", "file-count", "object-count", "disk-size", "files-size", "usage"]

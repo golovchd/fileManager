@@ -11,10 +11,8 @@ from sqlite3 import OperationalError
 from time import CLOCK_MONOTONIC, clock_gettime_ns
 from typing import Any
 
-from file_manager.duplicates_cleanup import (ALLOWED_ACTIONS,
-                                             LEFT_DIR_KEEP_ACTION,
-                                             RIGHT_DIR_KEEP_ACTION,
-                                             SKIP_ACTION, DuplicatesCleanup)
+from file_manager.duplicates_cleanup import (ALLOWED_ACTIONS, LEFT_DIR_KEEP_ACTION,
+                                             RIGHT_DIR_KEEP_ACTION, SKIP_ACTION, DuplicatesCleanup)
 from file_manager.file_database import DEFAULT_DATABASE, FileManagerDatabase
 from file_manager.file_utils import generate_file_hash
 from file_manager.utils import print_table
