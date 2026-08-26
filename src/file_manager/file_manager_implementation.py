@@ -236,7 +236,7 @@ class FileUtils(FileManagerDatabase):
         return self._dir_content[dir_id]
 
     def list_dir(
-                self, disk: str, dir_path: str, recursive: bool,
+                self, disk: str, dir_path: str, recursive: bool, numbers_format: NumbersFormat,
                 summary: bool = False, only_count: bool = False, print_sha: bool = False, max_depth: int | None = None
             ) -> tuple[int, int, int]:
         if summary:
@@ -253,12 +253,13 @@ class FileUtils(FileManagerDatabase):
         dir_content, dir_size, files_count, subdir_count = self._get_dir_content(
             self._cur_dir_id, sort_index=1, recursive=recursive or summary)
 
+        size_formatter = numbers_format.get_formatter()
         if not (summary or only_count):
-            print_dir_content(dir_path, dir_content, print_sha, self if recursive else None)
+            print_dir_content(dir_path, dir_content, print_sha, size_formatter, self if recursive else None)
 
         if not only_count and (not recursive or subdir_count and not summary):
             suffix = " (not counted)" if not (recursive or summary) else ""
-            print(f"Size of files in {dir_path} is {dir_size}B, contains "
+            print(f"Size of files in {dir_path} is {size_formatter(dir_size)}, contains "
                 f"{files_count} files and {subdir_count} subdirs{suffix}")
 
         if not recursive or max_depth is not None and max_depth <= 1:
@@ -273,7 +274,7 @@ class FileUtils(FileManagerDatabase):
                 max_depth=max_depth-1 if max_depth is not None else None
             )
         if not only_count:
-            print(f"Size of files in {dir_path} with subdirs is {dir_size} B, "
+            print(f"Size of files in {dir_path} with subdirs is {size_formatter(dir_size)},"
                   f"contains {files_count} files and {subdir_count} subdirs")
         return dir_size, files_count, subdir_count
 
@@ -536,21 +537,21 @@ class FileUtils(FileManagerDatabase):
         return 0
 
 
-def print_dir_content(dir_path: str, dir_content: list[tuple[int, str, float, float, int, int, str]], print_sha: bool, file_utils: FileUtils | None = None) -> None:
+def print_dir_content(dir_path: str, dir_content: list[tuple[int, str, float, float, int, int, str]], print_sha: bool, size_formatter: Callable, file_utils: FileUtils | None = None) -> None:
     if file_utils is None:
-        print_dir_content_short(dir_path, dir_content, print_sha)
+        print_dir_content_short(dir_path, dir_content, print_sha, size_formatter)
     else:
-        print_dir_content_with_sizes(dir_path, dir_content, print_sha, file_utils)
+        print_dir_content_with_sizes(dir_path, dir_content, print_sha, size_formatter, file_utils)
 
 
-def print_dir_content_short(dir_path: str, dir_content: list[tuple[int, str, float, float, int, int, str]], print_sha: bool) -> None:
+def print_dir_content_short(dir_path: str, dir_content: list[tuple[int, str, float, float, int, int, str]], print_sha: bool, size_formatter: Callable) -> None:
     headers = ["Name", "Size", "File Date", "Hash Date"]
     if print_sha:
         headers.append("SHA1")
     indexes = [1, 5, 2, 3, 6]
     formats: list[Callable] = [
         str,
-        lambda x: str(x) if x else "dir",
+        lambda x: size_formatter(x) if x else "dir",
         timestamp2exif_str,
         timestamp2exif_str,
         str
@@ -562,7 +563,7 @@ def print_dir_content_short(dir_path: str, dir_content: list[tuple[int, str, flo
         formats=formats, aligns=aligns)
 
 
-def print_dir_content_with_sizes(dir_path: str, dir_content: list[tuple[int, str, float, float, int, int, str]], print_sha: bool, file_utils: FileUtils) -> None:
+def print_dir_content_with_sizes(dir_path: str, dir_content: list[tuple[int, str, float, float, int, int, str]], print_sha: bool, size_formatter: Callable, file_utils: FileUtils) -> None:
     headers = ["Name", "Size", "File Date", "Hash Date"]
     indexes = [1, 5, 2, 3]
     if print_sha:
@@ -578,11 +579,11 @@ def print_dir_content_with_sizes(dir_path: str, dir_content: list[tuple[int, str
             print_data.append([*record, *file_utils.get_dir_size(record[0])])
     formats: list[Callable] = [
         str,
-        lambda x: str(x) if x else "dir",
+        lambda x: size_formatter(x) if x else "dir",
         timestamp2exif_str,
         timestamp2exif_str,
         str,
-        str,
+        size_formatter,
         str,
         str,
     ]
