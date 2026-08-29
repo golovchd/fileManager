@@ -10,7 +10,8 @@ from file_manager.file_database import FileManagerDatabase
 from file_manager.file_utils import NumbersFormat, convert_to_bytes, get_disk_info
 from file_manager.utils import print_table, timestamp2exif_str
 
-SORT_OPTIONS = ["id", "uuid", "label", "file-count", "object-count", "disk-size", "files-size", "usage"]
+SORT_OPTIONS = ["id", "uuid", "label", "disk-size"]
+SORT_OPTIONS_WITH_SIZE = ["id", "uuid", "label", "file-count", "object-count", "disk-size", "files-size", "usage"]
 SORT_OPTIONS_UNIQUE = ["id", "uuid", "label", "disk-size", "files-size", "unique-size", "usage", "unique-usage", "unique-percent"]
 
 _BACKUP_COUNT = ("SELECT `fsrecords`.*, `files`.* FROM ("
@@ -25,11 +26,11 @@ _BACKUP_COUNT = ("SELECT `fsrecords`.*, `files`.* FROM ("
                  "INNER JOIN `files` ON "
                  "`count_files`.`FileId` = `files`.`ROWID` "
                  "WHERE `DiskId` = ? {}")
-_DISKS_SELECT = "SELECT `ROWID`, `UUID`, `Label`, `DiskSize`/1024 FROM `disks`"
+_DISKS_SELECT = "SELECT `ROWID`, `UUID`, `Label`, `DiskSize`*1024 FROM `disks`"
 _DISK_SELECT_SIZE = ("SELECT `disks`.`ROWID`, `UUID`, `Label`, "
                      "COUNT(DISTINCT `FileId`) AS `FilesCount`, "
                      "COUNT(DISTINCT `fsrecords`.ROWID) AS `ObjectCount`, "
-                     "`DiskSize`/1024 AS `DiskSizeMiB`, SUM(`FileSize`)/1048576 AS `FilesSizeMiB` "
+                     "`DiskSize`*1024 AS `DiskSize`, SUM(`FileSize`) AS `FilesSize` "
                      "FROM `disks` "
                      "INNER JOIN `fsrecords` ON `DiskId` = `disks`.`ROWID` "
                      "INNER JOIN `files` ON `files`.`ROWID` = `FileId` "
@@ -128,23 +129,42 @@ class FileUtils(FileManagerDatabase):
                     headers, aligns=["<", "<", ">", ">", "<"], formats=formats)
         return 0
 
-    def list_disks(self, filter: str, cal_size: bool, sort_by: str) -> None:
+    def list_disks(self, filter: str, cal_size: bool, sort_by: str, numbers_format: NumbersFormat) -> None:
         disks_list = self.query_disks(filter)
         if not disks_list:
             logging.warning(f"Filter {filter} does not match any disk")
             return
-        headers = ["DiskID", "UUID", "Label", "DiskSize, MiB"]
+        sort_idx = SORT_OPTIONS_WITH_SIZE.index(sort_by) if cal_size else SORT_OPTIONS.index(sort_by)
+
+        headers = ["DiskID", "UUID", "Label", "DiskSize"]
+        formats: list[Callable] = [
+            str,
+            str,
+            str,
+            numbers_format.get_formatter(),
+        ]
         if not cal_size:
-            print_table(disks_list, headers)
+            if sort_idx >= len(disks_list[0]):
+                sort_idx = 0
+            print_table(sorted(disks_list, key=lambda info: info[sort_idx]), headers, formats=formats)
             return
 
-        headers = ["DiskID", "UUID", "Label", "FilesCount", "ObjectCount", "DiskSize, MiB", "FilesSize, MiB", "Usage, %"]
+        headers = ["DiskID", "UUID", "Label", "FilesCount", "ObjectCount", "DiskSize", "FilesSize", "Usage, %"]
+        formats = [
+            str,
+            str,
+            str,
+            str,
+            str,
+            numbers_format.get_formatter(),
+            numbers_format.get_formatter(),
+            str,
+        ]
         id_list = tuple(int(disk[0]) for disk in disks_list)
         disk_usage = self.query_disks("", cal_size=True, id_list=id_list)
-        sort_idx = SORT_OPTIONS.index(sort_by)
         if sort_idx >= len(disk_usage[0]):
             sort_idx = 0
-        print_table(sorted(disk_usage, key=lambda info: info[sort_idx]), headers)
+        print_table(sorted(disk_usage, key=lambda info: info[sort_idx]), headers, formats=formats)
 
     def update_disk(self, filter: str) -> None:
         disks_list = self.query_disks(filter)
@@ -418,7 +438,7 @@ class FileUtils(FileManagerDatabase):
         print_find_results(matching_list, print_sha, numbers_format)
         return 0
 
-    def get_unique_files(self, disk: str, dir_ids: list[int], disk_index: int, exclude_path: list[str]) -> tuple[int, int, int, int]:
+    def get_unique_files(self, disk: str, dir_ids: list[int], disk_index: int, exclude_path: list[str], numbers_format: NumbersFormat) -> tuple[int, int, int, int]:
         """Generates dictionary self._baseline_file_disks of unique files under provided dir_id
             Returned elements:
             - Number of unique files under dir_ids on current disk
@@ -469,26 +489,28 @@ class FileUtils(FileManagerDatabase):
                     logging.debug(f"New file: {self.disk_name}/{self.get_path(cur_dir_id)}/{row[1]}")
 
         path_list = [self.get_path(dir_id) for dir_id in dir_ids]
-        logging.debug(f"Disk {disk} under {','.join(path_list)} have {files_count} unique files, size {dir_size} in {subdirs_count} subdirs, baseline count = {baseline_files_count}, size = {baseline_files_size}")
+        size_formatter = numbers_format.get_formatter()
+        logging.debug(f"Disk {disk} under {','.join(path_list)} have {files_count} unique files, size {size_formatter(dir_size)} in {subdirs_count} subdirs, baseline count = {baseline_files_count}, size = {size_formatter(baseline_files_size)}")
         logging.debug(f"Size of self._baseline_file_disks {len(self._baseline_file_disks)}")
         if disk_index:
-            logging.info(f"Disk {disk} under {','.join(path_list)} have {new_files_count} new unique files, size {new_files_size}")
+            logging.info(f"Disk {disk} under {','.join(path_list)} have {new_files_count} new unique files, size {size_formatter(new_files_size)}")
         return (files_count, dir_size, new_files_count, new_files_size)
 
-    def path_redundancy(self, disks: list[str], paths: list[str], exclude_path: list[str], files_count_limit: int=1) -> None:
+    def path_redundancy(self, disks: list[str], paths: list[str], exclude_path: list[str], numbers_format: NumbersFormat, show_files: bool, files_count_limit: int=1) -> None:
         path_id = { disk: [self.get_path_on_disk(disk, path) for path in paths if self.get_path_on_disk(disk, path)] for disk in disks}
         logging.info(f"Calculating redundancy of {','.join(paths)} on disks {','.join(path_id.keys())}")
         logging.debug(path_id)
         disk_index = 0
         disk_status = {}
         for disk, dir_ids in path_id.items():
-            disk_status[disk] = self.get_unique_files(disk, dir_ids, disk_index, exclude_path)
+            disk_status[disk] = self.get_unique_files(disk, dir_ids, disk_index, exclude_path, numbers_format)
             disk_index += 1
         limited_files_id = [file_id for file_id, disk_list in self._baseline_file_disks.items() if len(disk_list) <= files_count_limit]
-        for path in paths:
-            for disk_label, file_path_list in self.get_file_path_on_disk(limited_files_id, disks, parent_root_path=path, exclude_path=exclude_path).items():
-                for file_path in file_path_list:
-                    logging.info(f"File {file_path} only present on disk {disk_label}")
+        if show_files:
+            for path in paths:
+                for disk_label, file_path_list in self.get_file_path_on_disk(limited_files_id, disks, parent_root_path=path, exclude_path=exclude_path).items():
+                    for file_path in file_path_list:
+                        logging.info(f"File {file_path} only present on disk {disk_label}")
         logging.info(f"{len(limited_files_id)} files have less copies then {files_count_limit} on disks {','.join(disks)}")
 
     def move_fs_item(
