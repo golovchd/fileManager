@@ -10,7 +10,8 @@ from file_manager.file_database import FileManagerDatabase
 from file_manager.file_utils import NumbersFormat, convert_to_bytes, get_disk_info
 from file_manager.utils import print_table, timestamp2exif_str
 
-SORT_OPTIONS = ["id", "uuid", "label", "file-count", "object-count", "disk-size", "files-size", "usage"]
+SORT_OPTIONS = ["id", "uuid", "label", "disk-size"]
+SORT_OPTIONS_WITH_SIZE = ["id", "uuid", "label", "file-count", "object-count", "disk-size", "files-size", "usage"]
 SORT_OPTIONS_UNIQUE = ["id", "uuid", "label", "disk-size", "files-size", "unique-size", "usage", "unique-usage", "unique-percent"]
 
 _BACKUP_COUNT = ("SELECT `fsrecords`.*, `files`.* FROM ("
@@ -25,11 +26,11 @@ _BACKUP_COUNT = ("SELECT `fsrecords`.*, `files`.* FROM ("
                  "INNER JOIN `files` ON "
                  "`count_files`.`FileId` = `files`.`ROWID` "
                  "WHERE `DiskId` = ? {}")
-_DISKS_SELECT = "SELECT `ROWID`, `UUID`, `Label`, `DiskSize`/1024 FROM `disks`"
+_DISKS_SELECT = "SELECT `ROWID`, `UUID`, `Label`, `DiskSize`*1024 FROM `disks`"
 _DISK_SELECT_SIZE = ("SELECT `disks`.`ROWID`, `UUID`, `Label`, "
                      "COUNT(DISTINCT `FileId`) AS `FilesCount`, "
                      "COUNT(DISTINCT `fsrecords`.ROWID) AS `ObjectCount`, "
-                     "`DiskSize`/1024 AS `DiskSizeMiB`, SUM(`FileSize`)/1048576 AS `FilesSizeMiB` "
+                     "`DiskSize`*1024 AS `DiskSize`, SUM(`FileSize`) AS `FilesSize` "
                      "FROM `disks` "
                      "INNER JOIN `fsrecords` ON `DiskId` = `disks`.`ROWID` "
                      "INNER JOIN `files` ON `files`.`ROWID` = `FileId` "
@@ -128,23 +129,42 @@ class FileUtils(FileManagerDatabase):
                     headers, aligns=["<", "<", ">", ">", "<"], formats=formats)
         return 0
 
-    def list_disks(self, filter: str, cal_size: bool, sort_by: str) -> None:
+    def list_disks(self, filter: str, cal_size: bool, sort_by: str, numbers_format: NumbersFormat) -> None:
         disks_list = self.query_disks(filter)
         if not disks_list:
             logging.warning(f"Filter {filter} does not match any disk")
             return
-        headers = ["DiskID", "UUID", "Label", "DiskSize, MiB"]
+        sort_idx = SORT_OPTIONS_WITH_SIZE.index(sort_by) if cal_size else SORT_OPTIONS.index(sort_by)
+
+        headers = ["DiskID", "UUID", "Label", "DiskSize"]
+        formats: list[Callable] = [
+            str,
+            str,
+            str,
+            numbers_format.get_formatter(),
+        ]
         if not cal_size:
-            print_table(disks_list, headers)
+            if sort_idx >= len(disks_list[0]):
+                sort_idx = 0
+            print_table(sorted(disks_list, key=lambda info: info[sort_idx]), headers, formats=formats)
             return
 
-        headers = ["DiskID", "UUID", "Label", "FilesCount", "ObjectCount", "DiskSize, MiB", "FilesSize, MiB", "Usage, %"]
+        headers = ["DiskID", "UUID", "Label", "FilesCount", "ObjectCount", "DiskSize", "FilesSize", "Usage, %"]
+        formats = [
+            str,
+            str,
+            str,
+            str,
+            str,
+            numbers_format.get_formatter(),
+            numbers_format.get_formatter(),
+            str,
+        ]
         id_list = tuple(int(disk[0]) for disk in disks_list)
         disk_usage = self.query_disks("", cal_size=True, id_list=id_list)
-        sort_idx = SORT_OPTIONS.index(sort_by)
         if sort_idx >= len(disk_usage[0]):
             sort_idx = 0
-        print_table(sorted(disk_usage, key=lambda info: info[sort_idx]), headers)
+        print_table(sorted(disk_usage, key=lambda info: info[sort_idx]), headers, formats=formats)
 
     def update_disk(self, filter: str) -> None:
         disks_list = self.query_disks(filter)
