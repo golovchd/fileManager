@@ -385,7 +385,7 @@ class FileUtils(FileManagerDatabase):
         _, dir1_id, disk1_name = self.get_disk_dir_id(disk1_path)
         return self.diff_dirs(disk1_name, dir1_id, disk2_name, dir2_id)
 
-    def find(self, disk: str, dir: bool, name: str, include_path: list[str], exclude_path: list[str], size: str, print_sha: bool) -> int:
+    def find(self, disk: str, dir: bool, name: str, include_path: list[str], exclude_path: list[str], size: str, print_sha: bool, numbers_format: NumbersFormat) -> int:
         disk_ids = [row[0] for row in self._query_disks([disk])] if disk else []
         name_param = name.replace("?", "_").replace("*", "%")
         params = [name_param]
@@ -415,7 +415,7 @@ class FileUtils(FileManagerDatabase):
             matching_list.append([*row, path])
 
 
-        print_find_results(matching_list, print_sha)
+        print_find_results(matching_list, print_sha, numbers_format)
         return 0
 
     def get_unique_files(self, disk: str, dir_ids: list[int], disk_index: int, exclude_path: list[str]) -> tuple[int, int, int, int]:
@@ -597,16 +597,17 @@ def print_dir_content_with_sizes(dir_path: str, dir_content: list[tuple[int, str
         formats=formats, aligns=aligns)
 
 
-def print_find_results(find_results: list[list[Any]], print_sha: bool) -> None:
+def print_find_results(find_results: list[list[Any]], print_sha: bool, numbers_format: NumbersFormat) -> None:
     headers = ["Name", "Disk", "Path", "Size", "File Date", "Hash Date"]
     if print_sha:
         headers.append("SHA1")
     indexes = [1, 9, 10, 5, 2, 3, 6]
+    size_formatter = numbers_format.get_formatter()
     formats: list[Callable] = [
         str,
         str,
         str,
-        lambda x: str(x) if x else "dir",
+        lambda x: size_formatter(x) if x else "dir",
         timestamp2exif_str,
         timestamp2exif_str,
         lambda x: str(x) if x else "",

@@ -33,7 +33,7 @@ def diff_command(file_db: FileUtils, args: argparse.Namespace) -> int:
 
 
 def find_command(file_db: FileUtils, args: argparse.Namespace) -> int:
-    return file_db.find(args.disk, args.dir, args.name, args.include_path, args.exclude_path, args.size, args.print_sha)
+    return file_db.find(args.disk, args.dir, args.name, args.include_path, args.exclude_path, args.size, args.print_sha, NumbersFormat.get_number_format(args))
 
 
 def move_command(file_db: FileUtils, args: argparse.Namespace) -> int:
