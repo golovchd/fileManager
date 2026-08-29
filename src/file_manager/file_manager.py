@@ -11,7 +11,7 @@ from file_manager.file_utils import NumbersFormat, check_etag, get_possible_etag
 
 def list_disks_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     """Listing disks."""
-    file_db.list_disks(args.disk, args.size, args.sort)
+    file_db.list_disks(args.disk, args.size, args.sort, NumbersFormat.get_number_format(args))
     return 0
 
 
