@@ -274,7 +274,7 @@ def test_diff(tmp_path: Path, path1: str,  path2: str, result: int) -> None:
     ]
 )
 def test_find(mocker, tmp_path: Path, disk: str, dir: bool, name: str, include_path: list[str], exclude_path: list[str], size: str, expected_result) -> None:
-    def mock_print_find_results(find_results: list[list[Any]], print_sha: bool) -> None:
+    def mock_print_find_results(find_results: list[list[Any]], print_sha: bool, numbers_format: NumbersFormat) -> None:
         assert find_results == expected_result
 
     mocker.patch(
@@ -283,4 +283,4 @@ def test_find(mocker, tmp_path: Path, disk: str, dir: bool, name: str, include_p
     reference_db_path = tmp_path / _TEST_DB_NAME
     create_db(reference_db_path, _DB_TEST_DB_1)
     with FileUtils(reference_db_path) as db:
-        db.find(disk, dir,  name, include_path, exclude_path, size, False)
+        db.find(disk, dir,  name, include_path, exclude_path, size, False, NumbersFormat.KILOBYTES)
