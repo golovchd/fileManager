@@ -56,7 +56,7 @@ def unique_files_command(file_db: FileUtils, args: argparse.Namespace) -> int:
 
 
 def path_redundancy_command(file_db: FileUtils, args: argparse.Namespace) -> int:
-    file_db.path_redundancy(args.disks, args.path, args.exclude_path, files_count_limit = args.count_limit)
+    file_db.path_redundancy(args.disks, args.path, args.exclude_path, NumbersFormat.get_number_format(args), args.show_files, files_count_limit = args.count_limit)
     return 0
 
 
@@ -185,6 +185,9 @@ def parse_arguments() -> argparse.Namespace:
         "-e", "--exclude-path", type=str, nargs='*', help="List of path to exclude")
     path_redundancy.add_argument(
         "-c", "--count-limit", type=int, default=1, help="Max number of file's backups to select, default 1")
+    path_redundancy.add_argument(
+        "-s", "--show-files", action="store_true", default=False, help="Show files that have less backups than a limit")
+
 
     delete_disk = subparsers.add_parser(
         "delete-disk", help="Delete disk and file records on it")
