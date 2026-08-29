@@ -44,9 +44,9 @@ _DIR_LIST_SELECT = ("SELECT `fsrecords`.`ROWID`, `fsrecords`.`Name`, "
                     " FROM `fsrecords` LEFT JOIN `files`"
                     " ON `files`.`ROWID` = `fsrecords`.`FileId`"
                     " WHERE `ParentId` = ? ORDER BY `FileId`, `Name`")
-_UNIQUE_FILES_SIZE = "SELECT SUM(`FileSize`)/1048576 FROM `files`"
+_UNIQUE_FILES_SIZE = "SELECT SUM(`FileSize`) FROM `files`"
 _UNIQUE_FILES_SIZE_DISKS = ("SELECT `disks`.`ROWID`, `UUID`, `Label`, "
-                            "`DiskSize`/1024, SUM(`Size`)/1048576 FROM `disks`"
+                            "`DiskSize`*1024, SUM(`Size`) FROM `disks`"
                             "INNER JOIN "
                             "(SELECT `DiskId`, `FileId`, "
                             "MIN(`FileSize`) AS `Size` FROM `files` "
@@ -158,7 +158,7 @@ class FileUtils(FileManagerDatabase):
              disks_list[0][0]),
             commit=True)
 
-    def unique_files(self, filter: str, sort_by: str) -> None:
+    def unique_files(self, filter: str, sort_by: str, numbers_format: NumbersFormat) -> None:
         disks_list = self.query_disks(filter)
         if not disks_list:
             logging.warning(f"Filter {filter} does not match any disk")
@@ -169,7 +169,7 @@ class FileUtils(FileManagerDatabase):
             "", size_query=_UNIQUE_FILES_SIZE_DISKS,
             cal_size=True, id_list=id_list)
         for index in range(len(unique_files)):
-            unique_files[index].insert(4, disk_usage[index][-2])
+            unique_files[index].insert(4, disk_usage[index][-2] * 1048576)
             unique_files[index].insert(-1, disk_usage[index][-1])
             unique_files[index].append(str(round(
                 100 * int(unique_files[index][5]) /
@@ -177,17 +177,19 @@ class FileUtils(FileManagerDatabase):
                 2)))
 
         headers = [
-            "DiskID", "UUID", "Label", "DiskSize, MiB", "FilesSize, MiB",
-            "UniqueFiles, MiB", "Usage, %", "Unique Usage, %", "Unique %",
+            "DiskID", "UUID", "Label", "DiskSize", "FilesSize",
+            "UniqueFiles", "Usage, %", "Unique Usage, %", "Unique %",
         ]
+        size_formatter = numbers_format.get_formatter()
+        formats: list[Callable] = [str, str, str, size_formatter, size_formatter, size_formatter, str, str, str]
         sort_idx = SORT_OPTIONS_UNIQUE.index(sort_by)
         if sort_idx >= len(unique_files[0]):
             sort_idx = 0
         print_table(sorted(unique_files, key=lambda info: info[sort_idx]),
-                    headers)
+                    headers, formats=formats)
 
         for row in self._exec_query(_UNIQUE_FILES_SIZE, (), commit=False):
-            print(f"Total size of unique files is {row[0]} MiB")
+            print(f"Total size of unique files is {size_formatter(row[0])}")
 
     def get_dir_size(self, dir_id) -> tuple[int, int, int]:
         if dir_id in self._dir_content:
