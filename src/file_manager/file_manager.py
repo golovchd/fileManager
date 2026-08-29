@@ -51,7 +51,7 @@ def update_disk_command(file_db: FileUtils, args: argparse.Namespace) -> int:
 
 
 def unique_files_command(file_db: FileUtils, args: argparse.Namespace) -> int:
-    file_db.unique_files(args.disk, args.sort)
+    file_db.unique_files(args.disk, args.sort, NumbersFormat.get_number_format(args))
     return 0
 
 
