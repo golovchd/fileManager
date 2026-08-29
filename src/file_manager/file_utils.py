@@ -39,6 +39,7 @@ PARTSIZES_DEFAULTS : list[int] = [ ## Default Partsizes Map (bytes)
 
 
 class NumbersFormat(Enum):
+    NO_FORMAT = 0
     BYTES = 1
     KILOBYTES = 2
     KIBIBYTES = 3
@@ -49,9 +50,13 @@ class NumbersFormat(Enum):
             return NumbersFormat.KIBIBYTES
         if args and hasattr(args, "bytes") and args.bytes:
             return NumbersFormat.BYTES
+        if args and hasattr(args, "numbers") and args.numbers:
+            return NumbersFormat.NO_FORMAT
         return NumbersFormat.KILOBYTES
 
     def get_formatter(self) -> Callable:
+        if self.value == NumbersFormat.NO_FORMAT.value:
+            return str
         if self.value == NumbersFormat.KILOBYTES.value:
             return NumbersFormat.kilobytes_formatter
         if self.value == NumbersFormat.KIBIBYTES.value:
@@ -218,11 +223,12 @@ def factor_of_1MB(filesize: int, num_parts: int) -> int:
   return int(x + 1048576 - y)
 
 
-def check_etag(file_path: Path, etag: str) -> bool:
+def check_etag(file_path: Path, etag: str, numbers_format: NumbersFormat) -> bool:
     """Checks if ETag of given file matches provided ETag."""
     file_size = file_path.stat().st_size
     num_parts = int(etag.split('-')[1])
-    logging.debug(f"check_etag for {file_path} with size {file_size} and etag {etag}.")
+    size_formatter = numbers_format.get_formatter()
+    logging.debug(f"check_etag for {file_path} with size {size_formatter(file_size)} and etag {etag}.")
     return etag == calc_etag(file_path, factor_of_1MB(file_size, num_parts))
 
 

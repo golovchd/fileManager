@@ -345,7 +345,7 @@ def test_get_possible_etags(test_file: str, result: list[str]) -> None:
     ]
 )
 def test_check_etag(test_file: str, etag: str, result: bool) -> None:
-    assert check_etag(TEST_DATA_DIR / test_file, etag) == result
+    assert check_etag(TEST_DATA_DIR / test_file, etag, NumbersFormat.KIBIBYTES) == result
 
 
 @pytest.mark.parametrize(
@@ -390,6 +390,7 @@ def test_get_storages(storage_regex_list: list[str], free_space_limit: dict[str,
 @pytest.mark.parametrize(
     "number, formatter, result",
     [
+        (1024, NumbersFormat.NO_FORMAT, "1024"),
         (1024, NumbersFormat.KIBIBYTES, "1.00 KiB"),
         (1024, NumbersFormat.KILOBYTES, "1.02 KB"),
         (1024, NumbersFormat.BYTES, "1,024 B"),
@@ -405,6 +406,8 @@ def test_numbers_format(number: int, formatter: NumbersFormat, result: str) -> N
 @pytest.mark.parametrize(
     "params, result",
     [
+        (["-n"], NumbersFormat.NO_FORMAT),
+        (["--numbers"], NumbersFormat.NO_FORMAT),
         (["-b"], NumbersFormat.BYTES),
         (["--bytes"], NumbersFormat.BYTES),
         (["-k"], NumbersFormat.KIBIBYTES),
@@ -419,4 +422,6 @@ def test_get_number_format(params: list[str], result: NumbersFormat):
         "-b", "--bytes", help="Output sizes in bytes", action="store_true")
     numned_format_group.add_argument(
         "-k", "--kibibytes", help="Output sizes KiB/MiB/GiB/TiB/PiB (1024-base) instead of default KB/MB/GB/TB/PB (1000-base)", action="store_true")
+    numned_format_group.add_argument(
+        "-n", "--numbers", help="Output sizes in bytes without formatting (parsing-friendly)", action="store_true")
     assert NumbersFormat.get_number_format(arg_parser.parse_args(args=params)).value == result.value

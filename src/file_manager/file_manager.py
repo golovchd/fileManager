@@ -56,7 +56,7 @@ def unique_files_command(file_db: FileUtils, args: argparse.Namespace) -> int:
 
 
 def path_redundancy_command(file_db: FileUtils, args: argparse.Namespace) -> int:
-    file_db.path_redundancy(args.disks, args.path, args.exclude_path, files_count_limit = args.count_limit)
+    file_db.path_redundancy(args.disks, args.path, args.exclude_path, NumbersFormat.get_number_format(args), args.show_files, files_count_limit = args.count_limit)
     return 0
 
 
@@ -66,7 +66,7 @@ def delete_disk_command(file_db: FileUtils, args: argparse.Namespace) -> int:
 
 def etag_check_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     if args.etag:
-        etag_check_result = check_etag(args.path, args.etag)
+        etag_check_result = check_etag(args.path, args.etag, NumbersFormat.get_number_format(args))
         print(f"ETag for file {args.path} {'matches' if etag_check_result else 'does not match'} provided value {args.etag}")
         return int(not etag_check_result)
     else:
@@ -84,7 +84,9 @@ def parse_arguments() -> argparse.Namespace:
         "-v", "--verbose", help="Verbose output", action="store_true")
     numned_format_group = arg_parser.add_mutually_exclusive_group()
     numned_format_group.add_argument(
-        "-b", "--bytes", help="Output sizes in bytes", action="store_true")
+        "-b", "--bytes", help="Output sizes in bytes, separated by comas", action="store_true")
+    numned_format_group.add_argument(
+        "-n", "--numbers", help="Output sizes in bytes without formatting (parsing-friendly)", action="store_true")
     numned_format_group.add_argument(
         "-k", "--kibibytes", help="Output sizes KiB/MiB/GiB/TiB/PiB (1024-base) instead of default KB/MB/GB/TB/PB (1000-base)", action="store_true")
     arg_parser.add_argument(
@@ -185,6 +187,9 @@ def parse_arguments() -> argparse.Namespace:
         "-e", "--exclude-path", type=str, nargs='*', help="List of path to exclude")
     path_redundancy.add_argument(
         "-c", "--count-limit", type=int, default=1, help="Max number of file's backups to select, default 1")
+    path_redundancy.add_argument(
+        "-s", "--show-files", action="store_true", default=False, help="Show files that have less backups than a limit")
+
 
     delete_disk = subparsers.add_parser(
         "delete-disk", help="Delete disk and file records on it")
