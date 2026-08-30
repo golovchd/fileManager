@@ -66,7 +66,7 @@ def delete_disk_command(file_db: FileUtils, args: argparse.Namespace) -> int:
 
 def etag_check_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     if args.etag:
-        etag_check_result = check_etag(args.path, args.etag)
+        etag_check_result = check_etag(args.path, args.etag, NumbersFormat.get_number_format(args))
         print(f"ETag for file {args.path} {'matches' if etag_check_result else 'does not match'} provided value {args.etag}")
         return int(not etag_check_result)
     else:
@@ -84,7 +84,9 @@ def parse_arguments() -> argparse.Namespace:
         "-v", "--verbose", help="Verbose output", action="store_true")
     numned_format_group = arg_parser.add_mutually_exclusive_group()
     numned_format_group.add_argument(
-        "-b", "--bytes", help="Output sizes in bytes", action="store_true")
+        "-b", "--bytes", help="Output sizes in bytes, thousands separated by comas", action="store_true")
+    numned_format_group.add_argument(
+        "-n", "--numbers", help="Output sizes in bytes without formatting (parsing-friendly)", action="store_true")
     numned_format_group.add_argument(
         "-k", "--kibibytes", help="Output sizes KiB/MiB/GiB/TiB/PiB (1024-base) instead of default KB/MB/GB/TB/PB (1000-base)", action="store_true")
     arg_parser.add_argument(
