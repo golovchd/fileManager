@@ -84,7 +84,7 @@ def parse_arguments() -> argparse.Namespace:
         "-v", "--verbose", help="Verbose output", action="store_true")
     numned_format_group = arg_parser.add_mutually_exclusive_group()
     numned_format_group.add_argument(
-        "-b", "--bytes", help="Output sizes in bytes, separated by comas", action="store_true")
+        "-b", "--bytes", help="Output sizes in bytes, thousands separated by comas", action="store_true")
     numned_format_group.add_argument(
         "-n", "--numbers", help="Output sizes in bytes without formatting (parsing-friendly)", action="store_true")
     numned_format_group.add_argument(
