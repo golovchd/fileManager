@@ -80,6 +80,8 @@ class FileUtils(FileManagerDatabase):
         super().__init__(db_path, 0)
         # Cache for _get_dir_content()
         self._dir_content: dict[int, tuple[list[tuple[int, str, float, float, int, int, str]], int, int, int]] = {}
+        self._dir_files: dict[int, dict[int, str]] = {}
+        self._dir_subdirs: dict[int, list[int]] = {}
 
     def query_disks(
             self, filter: str,
@@ -243,18 +245,30 @@ class FileUtils(FileManagerDatabase):
                 files_count += 1
             else:
                 subdir_count += 1
+        self._dir_files[dir_id] = {file_details[4]: file_details[1] for file_details in dir_content if file_details[6] is not None}
+        self._dir_subdirs[dir_id] = [file_details[0] for file_details in dir_content if file_details[6] is None]
         if dir_content and sort_index != -1 and sort_index < len(dir_content[0]):
             dir_content.sort(key=lambda x: x[sort_index] or f" {x[1]}")
         if recursive:
-            for record in dir_content:
-                if record[5] is not None:
-                    continue
-                _, subdir_size, subdir_files_count, subdir_subdir_count = self._get_dir_content(record[0], sort_index, recursive=True)
+            for subdir_id in self._dir_subdirs[dir_id]:
+                _, subdir_size, subdir_files_count, subdir_subdir_count = self._get_dir_content(subdir_id, sort_index, recursive=True)
                 dir_size += subdir_size
                 files_count += subdir_files_count
                 subdir_count += subdir_subdir_count
         self._dir_content[dir_id] = (dir_content, dir_size, files_count, subdir_count)
         return self._dir_content[dir_id]
+
+    """ Returns path of the file if it present in the tree of the dir_id."""
+    def _find_file_in_dir(self, file_id: int, dir_id: int) -> str:
+        if dir_id not in self._dir_files:
+            return ""
+        if file_id in self._dir_files[dir_id]:
+            return f"{self.get_path(dir_id)}/{self._dir_files[dir_id][file_id]}"
+        for subdir_id in self._dir_subdirs[dir_id]:
+            found_path = self._find_file_in_dir(file_id, subdir_id)
+            if found_path:
+                return found_path
+        return ""
 
     def list_dir(
                 self, disk: str, dir_path: str, recursive: bool, numbers_format: NumbersFormat,
@@ -321,11 +335,14 @@ class FileUtils(FileManagerDatabase):
             return [row]
         return []
 
-    def diff_dirs(self, disk1_name: str, dir1_id: int, disk2_name: str, dir2_id: int) -> int:
+    def diff_dirs(self, disk1_name: str, dir1_id: int, disk2_name: str, dir2_id: int, root_dir1_id: int, root_dir2_id: int, loose: bool) -> int:
         """Recursively compares dirs. Returns 0 is matching, > 0 otherwise"""
         result = 0
         dir1_content, _, files1_count, subdir1_count = self._get_dir_content(dir1_id, sort_index=6)
         dir2_content, _, files2_count, subdir2_count = self._get_dir_content(dir2_id, sort_index=6)
+        if loose and dir1_id == root_dir1_id and dir2_id == root_dir2_id:
+            self._get_dir_content(dir1_id, recursive=True)
+            self._get_dir_content(dir2_id, recursive=True)
         idx_1 = 0
         idx_2 = 0
         disk1_path = f"{disk1_name}/{self.get_path(dir1_id)}"
@@ -339,7 +356,7 @@ class FileUtils(FileManagerDatabase):
             row2 = dir2_content[idx_2]
             if not row1[6] and not row2[6]:  # both are dirs
                 if row1[1] == row2[1]:
-                    result += self.diff_dirs(disk1_name, int(row1[0]), disk2_name, int(row2[0]))
+                    result += self.diff_dirs(disk1_name, int(row1[0]), disk2_name, int(row2[0]), root_dir1_id, root_dir2_id, loose)
                     idx_1 += 1
                     idx_2 += 1
                 elif row1[1] < row2[1]:
@@ -358,10 +375,10 @@ class FileUtils(FileManagerDatabase):
                 idx_1 += 1
                 idx_2 += 1
             elif row1[6] < row2[6]:
-                missing_in_dir2_files.append(row1)
+                missing_in_dir2_files.append((*row1, self._find_file_in_dir(row1[4], root_dir2_id) if loose else ""))
                 idx_1 += 1
             else:
-                missing_in_dir1_files.append(row2)
+                missing_in_dir1_files.append((*row1, self._find_file_in_dir(row2[4], root_dir1_id) if loose else ""))
                 idx_2 += 1
             # Skip identical files to avoid diff on already compared files
             while idx_1 and idx_1 < files1_count + subdir1_count and row1[6] and row1[0] != dir1_content[idx_1][0] and dir1_content[idx_1][6] == row1[6]:
@@ -372,7 +389,7 @@ class FileUtils(FileManagerDatabase):
         while idx_1 < files1_count + subdir1_count:
             row1 = dir1_content[idx_1]
             if row1[6]:
-                missing_in_dir2_files.append(row1)
+                missing_in_dir2_files.append((*row1, self._find_file_in_dir(row1[4], root_dir2_id) if loose else ""))
             else:
                 missing_in_dir2_subdirs.extend(self._get_nonempty_dir_row(row1))
             idx_1 += 1
@@ -380,7 +397,7 @@ class FileUtils(FileManagerDatabase):
         while idx_2 < files2_count + subdir2_count:
             row2 = dir2_content[idx_2]
             if row2[6]:
-                missing_in_dir1_files.append(row2)
+                missing_in_dir1_files.append((*row1, self._find_file_in_dir(row2[4], root_dir1_id) if loose else ""))
             else:
                 missing_in_dir1_subdirs.extend(self._get_nonempty_dir_row(row2))
             idx_2 += 1
@@ -389,21 +406,27 @@ class FileUtils(FileManagerDatabase):
         missing_in_dir2_files.sort(key=lambda x: x[1])
         missing_in_dir1_subdirs.sort(key=lambda x: x[1])
         missing_in_dir2_subdirs.sort(key=lambda x: x[1])
-        for row2 in missing_in_dir1_files:
-            print(f"file {row2[1]} SHA1 {row2[6]} present in {disk2_path} and missing in {disk1_path}")
-        for row1 in missing_in_dir2_files:
-            print(f"file {row1[1]} SHA1 {row1[6]} present in {disk1_path} and missing in {disk2_path}")
-        for row2 in missing_in_dir1_subdirs:
-            print(f"subdir {row2[1]} present in {disk2_path} and missing in {disk1_path}")
-        for row1 in missing_in_dir2_subdirs:
-            print(f"subdir {row1[1]} present in {disk1_path} and missing in {disk2_path}")
+        for file_row in missing_in_dir1_files:
+            other_path = ""
+            if loose and file_row[-1]:
+                other_path = f", but present as {file_row[-1]}"
+            print(f"file {file_row[1]} SHA1 {file_row[6]} present in {disk2_path} and missing in {disk1_path}{other_path}")
+        for file_row in missing_in_dir2_files:
+            other_path = ""
+            if loose and file_row[-1]:
+                other_path = f", but present as {file_row[-1]}"
+            print(f"file {file_row[1]} SHA1 {file_row[6]} present in {disk1_path} and missing in {disk2_path}{other_path}")
+        for dir_row in missing_in_dir1_subdirs:
+            print(f"subdir {dir_row[1]} present in {disk2_path} and missing in {disk1_path}")
+        for dir_row in missing_in_dir2_subdirs:
+            print(f"subdir {dir_row[1]} present in {disk1_path} and missing in {disk2_path}")
 
         return result + len(missing_in_dir1_files) + len(missing_in_dir2_files) + len(missing_in_dir1_subdirs) + len(missing_in_dir2_subdirs)
 
-    def diff(self, disk1_path: str, disk2_path: str) -> int:
+    def diff(self, disk1_path: str, disk2_path: str, loose: bool=False) -> int:
         _, dir2_id, disk2_name = self.get_disk_dir_id(disk2_path)
         _, dir1_id, disk1_name = self.get_disk_dir_id(disk1_path)
-        return self.diff_dirs(disk1_name, dir1_id, disk2_name, dir2_id)
+        return self.diff_dirs(disk1_name, dir1_id, disk2_name, dir2_id, dir1_id, dir2_id, loose)
 
     def find(self, disk: str, dir: bool, name: str, include_path: list[str], exclude_path: list[str], size: str, print_sha: bool, numbers_format: NumbersFormat) -> int:
         disk_ids = [row[0] for row in self._query_disks([disk])] if disk else []
