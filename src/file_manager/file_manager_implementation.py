@@ -550,7 +550,7 @@ class FileUtils(FileManagerDatabase):
                       f"{dst_path.parent}")
         logging.debug(f"Moving dir {src_path} to {dst_path}")
 
-        if not dry_run and move(str(src_path), str(dst_path)) == dst_path:
+        if not dry_run and move(src_path, dst_path) == dst_path:
             self._exec_query(
                     _MOVE_FS_RECORD, (dst_parent_id, dst_path.name, object_id),
                     commit=True)
@@ -558,6 +558,9 @@ class FileUtils(FileManagerDatabase):
             logging.info(f"Dry run, DB parent undate {parent_id}->"
                          f"{dst_parent_id}, name {dst_path.name} for fsrecord "
                          f"{object_id} skipped")
+        else:
+            logging.error(f"move({src_path}, {dst_path}) result different from {dst_path}, no DB changes")
+            return 1
         return 0
 
 
