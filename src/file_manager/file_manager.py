@@ -29,8 +29,7 @@ def list_dir_command(file_db: FileUtils, args: argparse.Namespace) -> int:
 
 def diff_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     """Listing disks."""
-    return file_db.diff(args.disk1_path, args.disk2_path)
-
+    return file_db.diff(args.disk1_path, args.disk2_path, args.loose, NumbersFormat.get_number_format(args))
 
 def find_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     return file_db.find(args.disk, args.dir, args.name, args.include_path, args.exclude_path, args.size, args.print_sha, NumbersFormat.get_number_format(args))
@@ -144,6 +143,7 @@ def parse_arguments() -> argparse.Namespace:
     diff.set_defaults(func=diff_command, cmd_name="diff")
     diff.add_argument("disk1_path", type=str, help="Path to dir at disk 1")
     diff.add_argument("disk2_path", type=str, help="Path to dir at disk 2")
+    diff.add_argument("-l", "--loose", action="store_true", default=False, help="Loose dirs compare, ignore tree structure under root dirs")
 
     find = subparsers.add_parser(
         "find", help="Find file or folder in DB")

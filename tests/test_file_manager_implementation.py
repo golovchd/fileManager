@@ -140,55 +140,103 @@ def test_list_dir(tmp_path: Path, disk: str, path: str, recursive: bool, result:
         assert db.list_dir(disk, path, recursive, NumbersFormat.KILOBYTES) == result
 
 @pytest.mark.parametrize(
-    "path1, path2, result",
+    "path1, path2, loose, result",
     [
         (
             "0a2e2cb7-4543-43b3-a04a-40959889bd45/home/dimagolov/git/fileManager/test_data/storage/second_dir",
             "61BB-02E2/Data/storage/second_dir",
+            False,
             0,
         ),
         (
             "61BB-02E2/Data/storage/second_dir",
             "0a2e2cb7-4543-43b3-a04a-40959889bd45/home/dimagolov/git/fileManager/test_data/storage/second_dir",
+            False,
             0,
         ),
         (
             "0a2e2cb7-4543-43b3-a04a-40959889bd45/home/dimagolov/git/fileManager/test_data/storage",
             "61BB-02E2/Data/storage",
+            False,
             1,
         ),
         (
             "0a2e2cb7-4543-43b3-a04a-40959889bd45/home/dimagolov",
             "0a2e2cb7-4543-43b3-a04a-40959889bd45/home/dimagolov/git",
+            False,
             2,
         ),
         (
             "0a2e2cb7-4543-43b3-a04a-40959889bd45/home/dimagolov/git",
             "0a2e2cb7-4543-43b3-a04a-40959889bd45/home/dimagolov",
+            False,
             2,
         ),
         (
             "61BB-02E2/Data/storage",
             "0a2e2cb7-4543-43b3-a04a-40959889bd45/home/dimagolov/git/fileManager/test_data/storage",
+            False,
             1,
         ),
         (
             "61BB-02E2/Data/storage",
             "0a2e2cb7-4543-43b3-a04a-40959889bd45/home/dimagolov/git/fileManager/test_data/media",
+            False,
             7,
         ),
         (
             "0a2e2cb7-4543-43b3-a04a-40959889bd45/home/dimagolov/git/fileManager/test_data/media",
             "61BB-02E2/Data/storage",
+            False,
             7,
+        ),
+        (
+            "0a2e2cb7-4543-43b3-a04a-40959889bd45/home/dimagolov/git/fileManager/test_data/storage",
+            "61BB-02E2/Data/storage",
+            True,
+            2,
+        ),
+        (
+            "0a2e2cb7-4543-43b3-a04a-40959889bd45/home/dimagolov/git/fileManager/test_data/storage/tagged",
+            "61BB-02E2/Data/storage",
+            True,
+            5,
         ),
     ]
 )
-def test_diff(tmp_path: Path, path1: str,  path2: str, result: int) -> None:
+def test_diff(tmp_path: Path, path1: str,  path2: str, loose: bool, result: int) -> None:
     reference_db_path = tmp_path / _TEST_DB_NAME
     create_db(reference_db_path, _DB_TEST_DB_1)
     with FileUtils(reference_db_path) as db:
-        assert db.diff(path1, path2) == result
+        assert db.diff(path1, path2, loose, NumbersFormat.KILOBYTES) == result
+
+@pytest.mark.parametrize(
+    "dir_id, file_id",
+    [
+        (26, 9)
+    ]
+)
+def test_get_file_info_error(tmp_path: Path, dir_id: int, file_id: int) -> None:
+    reference_db_path = tmp_path / _TEST_DB_NAME
+    create_db(reference_db_path, _DB_TEST_DB_1)
+    with FileUtils(reference_db_path) as db:
+        with pytest.raises(ValueError, match=f"Failed to locate file with ID {file_id} in dir with ID {dir_id}"):
+            db._get_dir_files(dir_id)
+            db._get_file_info(file_id, dir_id)
+
+@pytest.mark.parametrize(
+    "dir_id, file_id, result",
+    [
+        (20, 9, (21, 'DSC06979.JPG', 1.69543415974938416483e+09, 1.69559021002043628688e+09, 9, 2902816, 'db5da8c807516b52f961ea7df4abe8160943f619')),
+        (14, 2, (15, 'DSC06979 (copy).JPG', 1.69543415968938732153e+09, 1.69559020989512157441e+09, 2, 3473408, 'f8b1465e6340d11f2a28d26cf896e6427ab41f63')),
+    ]
+)
+def test_get_file_info(tmp_path: Path, dir_id: int, file_id: int, result: tuple[int, str, float, float, int, int, str]) -> None:
+    reference_db_path = tmp_path / _TEST_DB_NAME
+    create_db(reference_db_path, _DB_TEST_DB_1)
+    with FileUtils(reference_db_path) as db:
+        db._get_dir_files(dir_id)
+        assert db._get_file_info(file_id, dir_id) == result
 
 @pytest.mark.parametrize(
     "disk, dir, name, include_path, exclude_path, size, expected_result",
