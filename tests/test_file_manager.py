@@ -188,4 +188,4 @@ def test_diff(tmp_path: Path, path1: str,  path2: str, result: int) -> None:
     reference_db_path = tmp_path / _TEST_DB_NAME
     create_db(reference_db_path, _DB_TEST_DB_1)
     with FileUtils(reference_db_path) as db:
-        assert db.diff(path1, path2) == result
+        assert db.diff(path1, path2, False, NumbersFormat.KILOBYTES) == result
