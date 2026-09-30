@@ -29,7 +29,7 @@ def list_dir_command(file_db: FileUtils, args: argparse.Namespace) -> int:
 
 def diff_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     """Listing disks."""
-    return file_db.diff(args.disk1_path, args.disk2_path, args.loose, NumbersFormat.get_number_format(args))
+    return file_db.diff(args.disk1_path, args.disk2_path, args.loose, NumbersFormat.get_number_format(args), show_first=args.show_first, show_second=args.show_second)
 
 def find_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     return file_db.find(args.disk, args.dir, args.name, args.include_path, args.exclude_path, args.size, args.print_sha, NumbersFormat.get_number_format(args))
@@ -144,6 +144,9 @@ def parse_arguments() -> argparse.Namespace:
     diff.add_argument("disk1_path", type=str, help="Path to dir at disk 1")
     diff.add_argument("disk2_path", type=str, help="Path to dir at disk 2")
     diff.add_argument("-l", "--loose", action="store_true", default=False, help="Loose dirs compare, ignore tree structure under root dirs")
+    show_only = diff.add_mutually_exclusive_group()
+    show_only.add_argument("-f", "--show-first", action="store_true", default=False, help="Show only files missing in the first dir only")
+    show_only.add_argument("-s", "--show-second", action="store_true", default=False, help="Show only files missing in the second dir only")
 
     find = subparsers.add_parser(
         "find", help="Find file or folder in DB")
