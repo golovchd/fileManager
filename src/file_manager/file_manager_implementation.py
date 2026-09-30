@@ -430,12 +430,12 @@ class FileUtils(FileManagerDatabase):
             print(f"Files under {disk_name}/{root_dir_path} that are missing in {missing_path}:")
             for file_id, file_dir_id_list in unique_files.items():
                 file_info = self._get_file_info(file_id, file_dir_id_list[0])
-                report_str = f"`{file_info[1]}` SHA {file_info[6]}, size {size_formatter(file_info[5])} present in "
+                report_str = f"`{file_info[1]}` SHA {file_info[6]}, size {size_formatter(file_info[5])} present "
                 for i in range(0, len(file_dir_id_list)):
                     if file_dir_id_list[i] != root_dir_id:
-                        dir_ref = f"subdir `{self.get_path(file_dir_id_list[i])[len(root_dir_path) + 1:]}`"
+                        dir_ref = f"in subdir `{self.get_path(file_dir_id_list[i])[len(root_dir_path) + 1:]}`"
                     else:
-                        dir_ref = f" on {disk_name}"
+                        dir_ref = f"on {disk_name}"
                     report_str += (", " if i else "") + dir_ref
                 print(f"{report_str} is missing under {missing_path}")
 
