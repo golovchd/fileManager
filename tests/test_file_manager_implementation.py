@@ -239,89 +239,94 @@ def test_get_file_info(tmp_path: Path, dir_id: int, file_id: int, result: tuple[
         assert db._get_file_info(file_id, dir_id) == result
 
 @pytest.mark.parametrize(
-    "disk, dir, name, include_path, exclude_path, size, expected_result",
+    "disk, dir, name, include_path, exclude_path, size, SHA, expected_result",
     [
-        (None, True, 'fileManager', [], [], '',
+        (None, True, 'fileManager', [], [], '', None,
             [[5, 'fileManager', None, None, None, None, None, 4, 1, '', 'home/dimagolov/git']]
         ),
-        (None, False, 'fileManager', [], [], '',
+        (None, False, 'fileManager', [], [], '', None,
             []
         ),
-        (None, False, 'IMG_0013.JPG', [], [], '',
+        (None, False, 'IMG_0013.JPG', [], [], '', None,
             [[11, 'IMG_0013.JPG', 1.69543415966538858416e+09, 1.69559020981002426141e+09, 4, 3242996, 'f7131eaafe02290403d0c96837e69e99134749a2', 7, 1, '', 'home/dimagolov/git/fileManager/test_data/media']]
         ),
-        (None, False, 'DSC06979c.JPG', [], [], '',
+        (None, False, 'DSC06979c.JPG', [], [], '', None,
             [
                 [17, 'DSC06979c.JPG', 1.6954341597253854275e+09, 1.69559020993184852597e+09, 7, 1215763, 'c81bb242e63bb1296fa1062fe5b3118f476193c9', 14, 1, '', 'home/dimagolov/git/fileManager/test_data/storage'],
                 [28, 'DSC06979c.JPG', 1.6954341597253854275e+09, 1.69559020993184852597e+09, 7, 1215763, 'c81bb242e63bb1296fa1062fe5b3118f476193c9', 26, 2, 'DG-5TB-4', 'Data/storage'],
             ]
         ),
-        (None, False, 'DSC06979c.JPG', ['Data/*'], [], '',
+        (None, False, 'DSC06979c.JPG', ['Data/*'], [], '', None,
             [
                 [28, 'DSC06979c.JPG', 1.6954341597253854275e+09, 1.69559020993184852597e+09, 7, 1215763, 'c81bb242e63bb1296fa1062fe5b3118f476193c9', 26, 2, 'DG-5TB-4', 'Data/storage'],
             ]
         ),
-        (None, False, 'DSC06979c.JPG', [], ['*dimagolov*'], '',
+        (None, False, 'DSC06979c.JPG', [], ['*dimagolov*'], '', None,
             [
                 [28, 'DSC06979c.JPG', 1.6954341597253854275e+09, 1.69559020993184852597e+09, 7, 1215763, 'c81bb242e63bb1296fa1062fe5b3118f476193c9', 26, 2, 'DG-5TB-4', 'Data/storage'],
             ]
         ),
-        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '+1215700',
+        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '+1215700', None,
             [
                 [28, 'DSC06979c.JPG', 1.6954341597253854275e+09, 1.69559020993184852597e+09, 7, 1215763, 'c81bb242e63bb1296fa1062fe5b3118f476193c9', 26, 2, 'DG-5TB-4', 'Data/storage'],
             ]
         ),
-        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '>1215700',
+        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '>1215700', None,
             [
                 [28, 'DSC06979c.JPG', 1.6954341597253854275e+09, 1.69559020993184852597e+09, 7, 1215763, 'c81bb242e63bb1296fa1062fe5b3118f476193c9', 26, 2, 'DG-5TB-4', 'Data/storage'],
             ]
         ),
-        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '+1215800',
+        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '+1215800', None,
             []
         ),
-        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '>1215800',
+        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '>1215800', None,
             []
         ),
-        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '-1215800',
+        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '-1215800', None,
             [
                 [28, 'DSC06979c.JPG', 1.6954341597253854275e+09, 1.69559020993184852597e+09, 7, 1215763, 'c81bb242e63bb1296fa1062fe5b3118f476193c9', 26, 2, 'DG-5TB-4', 'Data/storage'],
             ]
         ),
-        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '<1215800',
+        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '<1215800', None,
             [
                 [28, 'DSC06979c.JPG', 1.6954341597253854275e+09, 1.69559020993184852597e+09, 7, 1215763, 'c81bb242e63bb1296fa1062fe5b3118f476193c9', 26, 2, 'DG-5TB-4', 'Data/storage'],
             ]
         ),
-        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '-1215700',
+        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '-1215700', None,
             []
         ),
-        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '<1215700',
+        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '<1215700', None,
             []
         ),
-        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '1215763',
+        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '1215763', None,
             [
                 [28, 'DSC06979c.JPG', 1.6954341597253854275e+09, 1.69559020993184852597e+09, 7, 1215763, 'c81bb242e63bb1296fa1062fe5b3118f476193c9', 26, 2, 'DG-5TB-4', 'Data/storage'],
             ]
         ),
-        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '<1215763',
+        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '<1215763', None,
             []
         ),
-        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '>1215763',
+        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '>1215763', None,
             []
         ),
-        ('DG-5TB-4', False, 'DSC06979c.JPG', ['Data/*'], [], '',
+        ('DG-5TB-4', False, 'DSC06979c.JPG', ['Data/*'], [], '', None,
             [
                 [28, 'DSC06979c.JPG', 1.6954341597253854275e+09, 1.69559020993184852597e+09, 7, 1215763, 'c81bb242e63bb1296fa1062fe5b3118f476193c9', 26, 2, 'DG-5TB-4', 'Data/storage'],
             ]
         ),
-        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '',
+        ('DG-5TB-4', False, 'DSC06979c.JPG', [], [], '', None,
             [
                 [28, 'DSC06979c.JPG', 1.6954341597253854275e+09, 1.69559020993184852597e+09, 7, 1215763, 'c81bb242e63bb1296fa1062fe5b3118f476193c9', 26, 2, 'DG-5TB-4', 'Data/storage'],
+            ]
+        ),
+        (None, False, None, [], [], '', 'f19dfe09be521ccdf6957794128aef97c592baf6',
+            [
+                [12, 'not.an.image.txt', 1.69543415966538858416e+09, 1.69559020983142638206e+09, 5, 16, 'f19dfe09be521ccdf6957794128aef97c592baf6', 7, 1, '', 'home/dimagolov/git/fileManager/test_data/media'],
             ]
         ),
     ]
 )
-def test_find(mocker, tmp_path: Path, disk: str, dir: bool, name: str, include_path: list[str], exclude_path: list[str], size: str, expected_result) -> None:
+def test_find(mocker, tmp_path: Path, disk: str, dir: bool, name: str, include_path: list[str], exclude_path: list[str], size: str, SHA: str, expected_result) -> None:
     def mock_print_find_results(find_results: list[list[Any]], print_sha: bool, numbers_format: NumbersFormat) -> None:
         assert find_results == expected_result
 
@@ -331,4 +336,4 @@ def test_find(mocker, tmp_path: Path, disk: str, dir: bool, name: str, include_p
     reference_db_path = tmp_path / _TEST_DB_NAME
     create_db(reference_db_path, _DB_TEST_DB_1)
     with FileUtils(reference_db_path) as db:
-        db.find(disk, dir,  name, include_path, exclude_path, size, False, NumbersFormat.KILOBYTES)
+        db.find(disk, dir,  name, include_path, exclude_path, size, SHA, False, NumbersFormat.KILOBYTES)

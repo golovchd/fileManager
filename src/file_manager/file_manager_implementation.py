@@ -68,8 +68,7 @@ _FILD_SELECT = ("SELECT `fsrecords`.`ROWID`, `fsrecords`.`Name`, "
                 " FROM `fsrecords` LEFT JOIN `files`"
                 " ON `files`.`ROWID` = `fsrecords`.`FileId`"
                 " LEFT JOIN `disks` ON `disks`.`ROWID` = `DiskId`"
-                " WHERE `Name` LIKE ?"
-                " AND `fsrecords`.`FileId` IS {file}NULL{extra_condition}"
+                " WHERE {name_condition}`fsrecords`.`FileId` IS {file}NULL{extra_condition}"
                 " ORDER BY `DiskId`, `Name`,  `ParentId`")
 
 
@@ -466,10 +465,15 @@ class FileUtils(FileManagerDatabase):
         else:
             return self.diff_dirs(disk1_name, dir1_id, disk2_name, dir2_id, show_first=show_first, show_second=show_second)
 
-    def find(self, disk: str, dir: bool, name: str, include_path: list[str], exclude_path: list[str], size: str, print_sha: bool, numbers_format: NumbersFormat) -> int:
+    def find(self, disk: str, dir: bool, name: str, include_path: list[str], exclude_path: list[str], size: str, SHA: str, print_sha: bool, numbers_format: NumbersFormat) -> int:
         disk_ids = [row[0] for row in self._query_disks([disk])] if disk else []
-        name_param = name.replace("?", "_").replace("*", "%")
-        params = [name_param]
+        if name:
+            name_param = name.replace("?", "_").replace("*", "%")
+            name_condition = "`Name` LIKE ? AND "
+            params = [name_param]
+        else:
+            name_condition = ""
+            params = []
         if disk_ids:
             extra_condition = f" AND `DiskId` in (?{',?'*(len(disk_ids) - 1)})"
             params.extend(disk_ids)
@@ -485,9 +489,12 @@ class FileUtils(FileManagerDatabase):
             else:
                 extra_condition = f"{extra_condition} AND `FileSize` = ?"
                 params.append(str(convert_to_bytes(size)))
+        if SHA:
+            extra_condition = f"{extra_condition} AND `SHA1` = ?"
+            params.append(SHA)
         matching_list = []
         for row in self._exec_query(
-                _FILD_SELECT.format(file="" if dir else "NOT ", extra_condition=extra_condition), params, commit=False):
+                _FILD_SELECT.format(name_condition=name_condition, file="" if dir else "NOT ", extra_condition=extra_condition), params, commit=False):
             path = self.get_path(row[7], disk_id=row[8])
             if include_path and not any(re.match(include_pattern.replace("?", ".").replace("*", ".*"), path) for include_pattern in include_path):
                 continue
