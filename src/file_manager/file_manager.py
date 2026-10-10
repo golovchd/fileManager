@@ -32,7 +32,7 @@ def diff_command(file_db: FileUtils, args: argparse.Namespace) -> int:
     return file_db.diff(args.disk1_path, args.disk2_path, args.loose, NumbersFormat.get_number_format(args), show_first=args.show_first, show_second=args.show_second)
 
 def find_command(file_db: FileUtils, args: argparse.Namespace) -> int:
-    return file_db.find(args.disk, args.dir, args.name, args.include_path, args.exclude_path, args.size, args.print_sha, NumbersFormat.get_number_format(args))
+    return file_db.find(args.disk, args.dir, args.name, args.include_path, args.exclude_path, args.size, args.SHA, args.print_sha, NumbersFormat.get_number_format(args))
 
 
 def move_command(file_db: FileUtils, args: argparse.Namespace) -> int:
@@ -151,8 +151,10 @@ def parse_arguments() -> argparse.Namespace:
     find = subparsers.add_parser(
         "find", help="Find file or folder in DB")
     find.set_defaults(func=find_command, cmd_name="find")
-    find.add_argument("-n", "--name", type=str, required=True, help="Name matching pattern, could include bash wiledcards ? and *")
-    find.add_argument("-d", "--dir", action="store_true", default=False, help="Look for folders, not a files")
+    find.add_argument("-n", "--name", type=str, help="Name matching pattern, could include bash wiledcards ? and *")
+    dir_or_sha = find.add_mutually_exclusive_group()
+    dir_or_sha.add_argument("-d", "--dir", action="store_true", default=False, help="Look for folders, not a files")
+    dir_or_sha.add_argument("-S", "--SHA", type=str, help="File SHA to look for")
     find.add_argument("-i", "--include-path", type=str, nargs="*", help="Include path pattern, could include bash wiledcards ? and *")
     find.add_argument("-e", "--exclude-path", type=str, nargs="*", help="Exclude path pattern, could include bash wiledcards ? and *")
     find.add_argument("-s", "--size", type=str, help="Size filter. In bytes by default, could use K/KB/KiB/.../TiB suffixes and +/- to match bigger and smaller than specified files")
