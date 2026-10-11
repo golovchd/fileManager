@@ -319,14 +319,14 @@ def test_get_file_info(tmp_path: Path, dir_id: int, file_id: int, result: tuple[
                 [28, 'DSC06979c.JPG', 1.6954341597253854275e+09, 1.69559020993184852597e+09, 7, 1215763, 'c81bb242e63bb1296fa1062fe5b3118f476193c9', 26, 2, 'DG-5TB-4', 'Data/storage'],
             ]
         ),
-        (None, False, None, [], [], '', 'f19dfe09be521ccdf6957794128aef97c592baf6',
+        (None, False, None, [], [], '', ['f19dfe09be521ccdf6957794128aef97c592baf6'],
             [
                 [12, 'not.an.image.txt', 1.69543415966538858416e+09, 1.69559020983142638206e+09, 5, 16, 'f19dfe09be521ccdf6957794128aef97c592baf6', 7, 1, '', 'home/dimagolov/git/fileManager/test_data/media'],
             ]
         ),
     ]
 )
-def test_find(mocker, tmp_path: Path, disk: str, dir: bool, name: str, include_path: list[str], exclude_path: list[str], size: str, SHA: str, expected_result) -> None:
+def test_find(mocker, tmp_path: Path, disk: str, dir: bool, name: str, include_path: list[str], exclude_path: list[str], size: str, SHA: list[str], expected_result) -> None:
     def mock_print_find_results(find_results: list[list[Any]], print_sha: bool, numbers_format: NumbersFormat) -> None:
         assert find_results == expected_result
 

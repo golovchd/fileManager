@@ -154,7 +154,7 @@ def parse_arguments() -> argparse.Namespace:
     find.add_argument("-n", "--name", type=str, help="Name matching pattern, could include bash wiledcards ? and *")
     dir_or_sha = find.add_mutually_exclusive_group()
     dir_or_sha.add_argument("-d", "--dir", action="store_true", default=False, help="Look for folders, not a files")
-    dir_or_sha.add_argument("-S", "--SHA", type=str, help="File SHA to look for")
+    dir_or_sha.add_argument("-S", "--SHA", type=str, nargs="*", help="File SHA to look for")
     find.add_argument("-i", "--include-path", type=str, nargs="*", help="Include path pattern, could include bash wiledcards ? and *")
     find.add_argument("-e", "--exclude-path", type=str, nargs="*", help="Exclude path pattern, could include bash wiledcards ? and *")
     find.add_argument("-s", "--size", type=str, help="Size filter. In bytes by default, could use K/KB/KiB/.../TiB suffixes and +/- to match bigger and smaller than specified files")

@@ -465,7 +465,7 @@ class FileUtils(FileManagerDatabase):
         else:
             return self.diff_dirs(disk1_name, dir1_id, disk2_name, dir2_id, show_first=show_first, show_second=show_second)
 
-    def find(self, disk: str, dir: bool, name: str, include_path: list[str], exclude_path: list[str], size: str, SHA: str, print_sha: bool, numbers_format: NumbersFormat) -> int:
+    def find(self, disk: str, dir: bool, name: str, include_path: list[str], exclude_path: list[str], size: str, SHA: list[str], print_sha: bool, numbers_format: NumbersFormat) -> int:
         disk_ids = [row[0] for row in self._query_disks([disk])] if disk else []
         if name:
             name_param = name.replace("?", "_").replace("*", "%")
@@ -490,8 +490,8 @@ class FileUtils(FileManagerDatabase):
                 extra_condition = f"{extra_condition} AND `FileSize` = ?"
                 params.append(str(convert_to_bytes(size)))
         if SHA:
-            extra_condition = f"{extra_condition} AND `SHA1` = ?"
-            params.append(SHA)
+            extra_condition = f"{extra_condition} AND `SHA1` in (?{',?'*(len(SHA) - 1)})"
+            params.extend(SHA)
         matching_list = []
         for row in self._exec_query(
                 _FILD_SELECT.format(name_condition=name_condition, file="" if dir else "NOT ", extra_condition=extra_condition), params, commit=False):
